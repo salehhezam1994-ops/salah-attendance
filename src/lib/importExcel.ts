@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { saveFile } from './files';
+import { t, isRTL } from '../i18n';
 
 export interface ParsedSheet {
   headers: string[];
@@ -20,47 +21,48 @@ export async function parseExcel(file: File): Promise<ParsedSheet> {
   // البحث عن صف العناوين في أول 10 صفوف
   let hi = -1;
   for (let i = 0; i < Math.min(10, nonEmpty.length); i++) {
-    if (nonEmpty[i].some((c) => /اسم|الاسم|name/i.test(c))) {
+    if (nonEmpty[i].some((c) => /اسم|الاسم|name|ad[ıi]|isim|öğrenci/i.test(c))) {
       hi = i;
       break;
     }
   }
   const width = Math.max(...nonEmpty.map((r) => r.length));
-  const headers = hi >= 0 ? Array.from({ length: width }, (_, i) => nonEmpty[hi][i] || `عمود ${i + 1}`) : Array.from({ length: width }, (_, i) => `عمود ${i + 1}`);
+  const headers = hi >= 0 ? Array.from({ length: width }, (_, i) => nonEmpty[hi][i] || t('col_n', { n: i + 1 })) : Array.from({ length: width }, (_, i) => t('col_n', { n: i + 1 }));
   const rows = nonEmpty.slice(hi + 1);
 
   const find = (re: RegExp) => headers.findIndex((h) => re.test(h));
-  let name = find(/اسم|name/i);
+  let name = find(/اسم|name|ad\s*soyad|ad[ıi]|isim|öğrenci/i);
   if (name < 0) {
     // العمود الذي يحتوي أطول نصوص عربية
     let best = 0,
       bi = 0;
     for (let c = 0; c < width; c++) {
-      const score = rows.slice(0, 20).reduce((a, r) => a + (/[؀-ۿ]{2,}\s+[؀-ۿ]{2,}/.test(r[c] ?? '') ? 1 : 0), 0);
+      const score = rows.slice(0, 20).reduce((a, r) => a + (/\p{L}{2,}\s+\p{L}{2,}/u.test(r[c] ?? '') ? 1 : 0), 0);
       if (score > best) (best = score), (bi = c);
     }
     name = bi;
   }
   const guess = {
     name,
-    serial: find(/^م$|رقم|تسلسل|الرقم|serial|no\.?$|#/i),
-    phone: find(/جوال|هاتف|موبايل|تلفون|phone|mobile/i),
-    className: find(/الصف|صف|الفصل|فصل|class/i),
+    serial: find(/^م$|رقم|تسلسل|الرقم|serial|^no\.?$|numara|sıra|#/i),
+    phone: find(/جوال|هاتف|موبايل|تلفون|phone|mobile|telefon|cep/i),
+    className: find(/الصف|صف|الفصل|فصل|class|sınıf|sinif|grup/i),
   };
   if (guess.serial === guess.phone) guess.serial = -1;
   return { headers, rows, guess };
 }
 
 export async function downloadTemplate() {
+  const tr = !isRTL();
   const ws = XLSX.utils.aoa_to_sheet([
-    ['الرقم', 'اسم الطالب', 'الصف', 'الجوال'],
-    [1, 'محمد أحمد العلي', 'الصف الأول', '0500000000'],
-    [2, 'عبدالله سعد الحربي', 'الصف الأول', ''],
-    [3, 'خالد ناصر القحطاني', 'الصف الثاني', ''],
+    [t('tpl_serial'), t('tpl_name'), t('tpl_class'), t('tpl_phone')],
+    [1, tr ? 'Ahmet Yılmaz' : 'محمد أحمد العلي', t('tpl_ex_class1'), '05000000000'],
+    [2, tr ? 'Mehmet Kaya' : 'عبدالله سعد الحربي', t('tpl_ex_class1'), ''],
+    [3, tr ? 'Yusuf Demir' : 'خالد ناصر القحطاني', t('tpl_ex_class2'), ''],
   ]);
   ws['!cols'] = [{ wch: 8 }, { wch: 32 }, { wch: 16 }, { wch: 16 }];
   const wb = XLSX.utils.book_new();
-  wb.Workbook = { Views: [{ RTL: true }] };
-  XLSX.utils.book_append_sheet(wb, ws, 'الطلاب');
-  await saveFile(XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }), 'نموذج_استيراد_الطلاب.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  wb.Workbook = { Views: [{ RTL: isRTL() }] };
+  XLSX.utils.book_append_sheet(wb, ws, t('tpl_sheet'));
+  await saveFile(XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }), t('tpl_file') + '.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }

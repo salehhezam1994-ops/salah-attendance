@@ -1,14 +1,15 @@
 import * as XLSX from 'xlsx';
 import type { ReportDoc, DocTable } from './reportDoc';
 import { saveFile, safeName } from './files';
+import { t, isRTL, locale } from '../i18n';
 
 // ======================= Excel =======================
 export function docToWorkbook(doc: ReportDoc): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
-  wb.Workbook = { Views: [{ RTL: true }] };
+  wb.Workbook = { Views: [{ RTL: isRTL() }] };
   const used = new Set<string>();
   const sheetName = (n: string) => {
-    let s = n.replace(/[\\/?*[\]:]/g, ' ').slice(0, 28) || 'ورقة';
+    let s = n.replace(/[\\/?*[\]:]/g, ' ').slice(0, 28) || 'Sheet';
     let k = s,
       i = 2;
     while (used.has(k)) k = `${s} ${i++}`;
@@ -30,7 +31,7 @@ export function docToWorkbook(doc: ReportDoc): XLSX.WorkBook {
   }
   const ws0 = XLSX.utils.aoa_to_sheet(summary);
   ws0['!cols'] = [{ wch: 28 }, { wch: 40 }];
-  XLSX.utils.book_append_sheet(wb, ws0, sheetName('الملخص'));
+  XLSX.utils.book_append_sheet(wb, ws0, sheetName(t('sheet_summary')));
 
   for (const sec of doc.sections) {
     if (!sec.table || !sec.table.rows.length) continue;
@@ -85,8 +86,8 @@ function tableHTML(t: DocTable, rows = t.rows) {
   return `<table class="t"><thead><tr>${t.head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => rowHTML(t, r)).join('')}</tbody></table>`;
 }
 
-const PDF_CSS = `
-.pp{width:${PAGE_W}px;height:${PAGE_H}px;padding:${PAD}px;box-sizing:border-box;background:#fff;color:#1b1f1d;direction:rtl;font-family:Tajawal,system-ui,sans-serif;position:relative;overflow:hidden}
+const pdfCss = () => `
+.pp{width:${PAGE_W}px;height:${PAGE_H}px;padding:${PAD}px;box-sizing:border-box;background:#fff;color:#1b1f1d;direction:${isRTL() ? 'rtl' : 'ltr'};font-family:${isRTL() ? 'Tajawal' : 'Inter'},system-ui,sans-serif;position:relative;overflow:hidden}
 .pp h1{font-size:22px;margin:0 0 4px;color:#0f5132}
 .pp .org{font-size:13px;color:#555;margin-bottom:2px}
 .pp .sub{font-size:13px;color:#444;margin-bottom:14px;border-bottom:2px solid #0f5132;padding-bottom:10px}
@@ -99,7 +100,7 @@ const PDF_CSS = `
 .pp .t{width:100%;border-collapse:collapse;font-size:11.5px}
 .pp .t th{background:#0f5132;color:#fff;padding:6px 5px;font-weight:700}
 .pp .t td{border-bottom:1px solid #e3e7e5;padding:5px;text-align:center}
-.pp .t td:nth-child(2){white-space:nowrap;text-align:right}
+.pp .t td:nth-child(2){white-space:nowrap;text-align:start}
 .pp .t tr:nth-child(even) td{background:#f7f9f8}
 .pp .t td.g{color:#157347;font-weight:700}.pp .t td.y{color:#9a6700;font-weight:700}.pp .t td.r{color:#b02a37;font-weight:700}
 .pp .txt{font-size:13px;color:#333}
@@ -169,7 +170,7 @@ function paginate(doc: ReportDoc, host: HTMLElement): HTMLElement[] {
   pages.forEach((p, i) => {
     const f = document.createElement('div');
     f.className = 'ft';
-    f.innerHTML = `<span>برنامج متابعة حضور الصلاة — ${now.toLocaleDateString('ar-EG')}</span><span>صفحة ${i + 1} من ${pages.length}</span>`;
+    f.innerHTML = `<span>${esc(t('pdf_footer', { date: now.toLocaleDateString(locale()) }))}</span><span>${esc(t('page_of', { i: i + 1, n: pages.length }))}</span>`;
     p.appendChild(f);
   });
   return pages;
@@ -186,7 +187,7 @@ export async function exportPdf(doc: ReportDoc) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;top:0;left:-10000px;z-index:-1;';
   const style = document.createElement('style');
-  style.textContent = PDF_CSS;
+  style.textContent = pdfCss();
   host.appendChild(style);
   document.body.appendChild(host);
   try {

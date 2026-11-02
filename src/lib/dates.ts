@@ -1,4 +1,5 @@
 import type { Prayer } from '../db/schema';
+import { getLang } from '../i18n';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -17,35 +18,38 @@ export function addDays(iso: string, n: number): string {
   return toISO(d);
 }
 
-const DAY_NAMES = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+// أرقام لاتينية في العربية أيضًا لوضوح الجداول
+const loc = () => (getLang() === 'ar' ? 'ar-u-nu-latn' : 'tr-TR');
+const fmt = (o: Intl.DateTimeFormatOptions, d: Date) => new Intl.DateTimeFormat(loc(), o).format(d);
 
-export const dayName = (iso: string) => DAY_NAMES[fromISO(iso).getDay()];
-export const monthName = (m: number) => MONTHS[m];
+export const dayName = (iso: string) => fmt({ weekday: 'long' }, fromISO(iso));
+export const monthName = (m: number, y = 2000) => fmt({ month: 'long' }, new Date(y, m, 1));
 
-/** عرض التاريخ: الاثنين 2 نوفمبر 2026 */
+/** عرض التاريخ: Pazartesi 2 Kasım 2026 / الاثنين 2 نوفمبر 2026 */
 export function fmtDate(iso: string, withDay = true): string {
   const d = fromISO(iso);
-  const s = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-  return withDay ? `${DAY_NAMES[d.getDay()]} ${s}` : s;
+  const s = `${d.getDate()} ${monthName(d.getMonth())} ${d.getFullYear()}`;
+  return withDay ? `${dayName(iso)} ${s}` : s;
 }
 export function fmtShort(iso: string): string {
   const d = fromISO(iso);
-  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
 export function hijri(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' }).format(fromISO(iso));
+    const l = getLang() === 'ar' ? 'ar-SA-u-ca-islamic-umalqura-nu-latn' : 'tr-TR-u-ca-islamic-umalqura';
+    return new Intl.DateTimeFormat(l, { day: 'numeric', month: 'long', year: 'numeric' }).format(fromISO(iso));
   } catch {
     return '';
   }
 }
 
-/** بداية الأسبوع (السبت) */
+/** بداية الأسبوع: الاثنين للتركية، السبت للعربية */
 export function weekStart(iso: string): string {
   const d = fromISO(iso);
-  const diff = (d.getDay() + 1) % 7; // السبت = 0
+  const first = getLang() === 'ar' ? 6 : 1;
+  const diff = (d.getDay() - first + 7) % 7;
   d.setDate(d.getDate() - diff);
   return toISO(d);
 }

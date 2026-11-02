@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
-import { db, type ClassRoom, type Student } from '../db/schema';
-import { addClass, deleteClass, deleteStudent, importStudents, moveClassOrder, moveStudents, nextSerial, renameClass, saveStudent, setStudentActive } from '../db/repo';
+import { db, type Activity, type ClassRoom, type Student } from '../db/schema';
+import { addActivity, deleteActivity, moveActivityOrder, renameActivity, addClass, deleteClass, deleteStudent, importStudents, moveClassOrder, moveStudents, nextSerial, renameClass, saveStudent, setStudentActive } from '../db/repo';
 import { useAuth } from '../auth';
 import { Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
 import { IArchive, IDown, IEdit, IMove, IPlus, ITrash, IUp, IUpload, IUsers } from '../components/Icons';
 import { parseExcel, downloadTemplate, type ParsedSheet } from '../lib/importExcel';
 import { pickFile } from '../lib/files';
+import { t } from '../i18n';
 
 export default function StudentsPage() {
   const { isAdmin, allowedClasses, user } = useAuth();
-  const [tab, setTab] = useState<'students' | 'classes'>('students');
+  const [tab, setTab] = useState<'students' | 'classes' | 'activities'>('students');
   const [editing, setEditing] = useState<Partial<Student> | null>(null);
   const [importing, setImporting] = useState(false);
   const classes = useLiveQuery(async () => allowedClasses(await db.classes.orderBy('order').toArray()), [user.id]);
@@ -19,13 +20,13 @@ export default function StudentsPage() {
   return (
     <>
       <header className="topbar">
-        <h1>الطلاب والصفوف</h1>
+        <h1>{t('students_title')}</h1>
         {isAdmin && (
           <>
-            <button className="ib" onClick={() => setImporting(true)} aria-label="استيراد من Excel">
+            <button className="ib" onClick={() => setImporting(true)} aria-label={t('import_excel')}>
               <IUpload />
             </button>
-            <button className="ib" onClick={() => setEditing({ classId: classes?.[0]?.id })} aria-label="إضافة طالب">
+            <button className="ib" onClick={() => setEditing({ classId: classes?.[0]?.id })} aria-label={t('add_student')}>
               <IPlus />
             </button>
           </>
@@ -35,14 +36,17 @@ export default function StudentsPage() {
         {isAdmin && (
           <div className="tabs">
             <button className={tab === 'students' ? 'on' : ''} onClick={() => setTab('students')}>
-              الطلاب
+              {t('tab_students')}
             </button>
             <button className={tab === 'classes' ? 'on' : ''} onClick={() => setTab('classes')}>
-              الصفوف
+              {t('tab_classes')}
+            </button>
+            <button className={tab === 'activities' ? 'on' : ''} onClick={() => setTab('activities')}>
+              {t('tab_activities')}
             </button>
           </div>
         )}
-        {classes && (tab === 'students' ? <StudentsTab classes={classes} onEdit={setEditing} onImport={() => setImporting(true)} /> : <ClassesTab classes={classes} />)}
+        {classes && (tab === 'students' ? <StudentsTab classes={classes} onEdit={setEditing} onImport={() => setImporting(true)} /> : tab === 'classes' ? <ClassesTab classes={classes} /> : <ActivitiesTab />)}
       </main>
       {editing && classes && <StudentForm init={editing} classes={classes} onClose={() => setEditing(null)} />}
       {importing && classes && <ImportSheet classes={classes} onClose={() => setImporting(false)} />}
@@ -70,10 +74,10 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
 
   if (classes.length === 0)
     return (
-      <Empty icon={<IUsers />} text="ابدأ بإنشاء الصفوف من تبويب «الصفوف»، أو استورد الطلاب من ملف Excel يحتوي عمود الصف وستُنشأ الصفوف تلقائيًا.">
+      <Empty icon={<IUsers />} text={t('empty_classes_hint')}>
         {isAdmin && (
           <button className="btn" onClick={onImport}>
-            <IUpload /> استيراد من Excel
+            <IUpload /> {t('import_excel')}
           </button>
         )}
       </Empty>
@@ -85,7 +89,7 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
       <div className="sp" />
       <div className="chips">
         <button className={'chip' + (!cls ? ' on' : '')} onClick={() => setCls(null)}>
-          الكل
+          {t('all')}
         </button>
         {classes.map((c) => (
           <button key={c.id} className={'chip' + (cls === c.id ? ' on' : '')} onClick={() => setCls(c.id)}>
@@ -94,20 +98,20 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
         ))}
       </div>
       <div className="row" style={{ margin: '4px 0 8px' }}>
-        <span className="grow small muted">{list.length} طالب{archived ? ' (مؤرشف)' : ''}</span>
+        <span className="grow small muted">{t('n_students', { n: list.length })}{archived ? t('archived_suffix') : ''}</span>
         {isAdmin && (
           <>
             <button className="btn sm ghost" onClick={() => setArchived((v) => !v)}>
-              {archived ? 'النشطون' : 'المؤرشفون'}
+              {archived ? t('active_btn') : t('archived_btn')}
             </button>
             <button className={'btn sm ' + (selecting ? '' : 'ghost')} onClick={() => (setSelecting((v) => !v), setSel(new Set()))}>
-              {selecting ? 'إلغاء التحديد' : 'تحديد'}
+              {selecting ? t('cancel_select') : t('select')}
             </button>
           </>
         )}
       </div>
       {list.length === 0 ? (
-        <Empty text="لا يوجد طلاب مطابقون." />
+        <Empty text={t('no_match')} />
       ) : (
         <div className="card" style={{ padding: '4px 14px' }}>
           {list.map((s) => (
@@ -127,7 +131,7 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
               ) : (
                 <span className="avatar">{s.serial}</span>
               )}
-              <button className="grow" style={{ textAlign: 'right' }} onClick={() => (selecting ? null : nav(`/student/${s.id}`))}>
+              <button className="grow" style={{ textAlign: 'start' }} onClick={() => (selecting ? null : nav(`/student/${s.id}`))}>
                 <b>{s.name}</b>
                 <div className="small muted">
                   {cmap.get(s.classId)?.name}
@@ -135,7 +139,7 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
                 </div>
               </button>
               {isAdmin && !selecting && (
-                <button className="ib" onClick={() => onEdit(s)} aria-label="تعديل">
+                <button className="ib" onClick={() => onEdit(s)} aria-label={t('edit')}>
                   <IEdit />
                 </button>
               )}
@@ -146,30 +150,30 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
       {selecting && sel.size > 0 && (
         <div className="actionbar">
           <button className="btn grow" onClick={() => setMoving(true)}>
-            <IMove /> نقل {sel.size} إلى صف آخر
+            <IMove /> {t('move_n', { n: sel.size })}
           </button>
           <button
             className="btn ghost"
             onClick={async () => {
               for (const id of sel) await setStudentActive(id, archived);
-              ui.toast(archived ? 'تمت الاستعادة' : 'تمت الأرشفة');
+              ui.toast(archived ? t('restored_done') : t('archived_done'));
               setSel(new Set());
             }}
           >
-            <IArchive /> {archived ? 'استعادة' : 'أرشفة'}
+            <IArchive /> {archived ? t('restore') : t('archive')}
           </button>
         </div>
       )}
       {moving && (
         <Sheet onClose={() => setMoving(false)}>
-          <h2>نقل {sel.size} طالب إلى:</h2>
+          <h2>{t('move_n_to', { n: sel.size })}</h2>
           {classes.map((c) => (
             <button
               key={c.id}
               className="menu-item"
               onClick={async () => {
                 await moveStudents([...sel], c.id);
-                ui.toast(`تم النقل إلى ${c.name}`);
+                ui.toast(t('moved_to', { name: c.name }));
                 setMoving(false);
                 setSelecting(false);
                 setSel(new Set());
@@ -190,25 +194,25 @@ function StudentForm({ init, classes, onClose }: { init: Partial<Student>; class
   const [keepAdding, setKeepAdding] = useState(false);
   const isNew = !init.id;
   const save = async () => {
-    if (!s.name?.trim()) return ui.toast('أدخل اسم الطالب', true);
-    if (!s.classId) return ui.toast('اختر الصف', true);
+    if (!s.name?.trim()) return ui.toast(t('enter_name'), true);
+    if (!s.classId) return ui.toast(t('choose_class'), true);
     let serial = s.serial;
     if (!serial) serial = await nextSerial();
     const dup = await db.students.where('serial').equals(serial).first();
-    if (dup && dup.id !== s.id) return ui.toast(`الرقم ${serial} مستخدم للطالب ${dup.name}`, true);
+    if (dup && dup.id !== s.id) return ui.toast(t('serial_used', { serial, name: dup.name }), true);
     await saveStudent({ ...s, serial, name: s.name, classId: s.classId });
-    ui.toast(isNew ? 'تمت إضافة الطالب' : 'تم الحفظ');
+    ui.toast(isNew ? t('student_added') : t('saved'));
     if (isNew && keepAdding) setS({ classId: s.classId });
     else onClose();
   };
   return (
     <Sheet onClose={onClose}>
-      <h2>{isNew ? 'إضافة طالب' : 'تعديل بيانات الطالب'}</h2>
-      <label className="f">الاسم الكامل *</label>
+      <h2>{isNew ? t('student_new') : t('student_edit')}</h2>
+      <label className="f">{t('full_name')}</label>
       <input autoFocus value={s.name ?? ''} onChange={(e) => setS({ ...s, name: e.target.value })} />
-      <label className="f">الصف *</label>
+      <label className="f">{t('class_req')}</label>
       <select value={s.classId ?? ''} onChange={(e) => setS({ ...s, classId: e.target.value })}>
-        <option value="">— اختر —</option>
+        <option value="">{t('choose')}</option>
         {classes.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
@@ -217,26 +221,26 @@ function StudentForm({ init, classes, onClose }: { init: Partial<Student>; class
       </select>
       <div className="row">
         <div className="grow">
-          <label className="f">الرقم التسلسلي</label>
-          <input type="number" inputMode="numeric" value={s.serial ?? ''} placeholder="تلقائي" onChange={(e) => setS({ ...s, serial: e.target.value ? Number(e.target.value) : undefined })} />
+          <label className="f">{t('serial')}</label>
+          <input type="number" inputMode="numeric" value={s.serial ?? ''} placeholder={t('auto')} onChange={(e) => setS({ ...s, serial: e.target.value ? Number(e.target.value) : undefined })} />
         </div>
         <div className="grow">
-          <label className="f">الجوال (اختياري)</label>
+          <label className="f">{t('phone_opt')}</label>
           <input type="tel" inputMode="tel" dir="ltr" value={s.phone ?? ''} onChange={(e) => setS({ ...s, phone: e.target.value })} />
         </div>
       </div>
       {isNew && (
         <label className="check">
           <input type="checkbox" checked={keepAdding} onChange={(e) => setKeepAdding(e.target.checked)} />
-          إضافة طالب آخر بعد الحفظ
+          {t('add_another')}
         </label>
       )}
       <div className="acts">
         <button className="btn" onClick={save}>
-          حفظ
+          {t('save')}
         </button>
         <button className="btn ghost" onClick={onClose}>
-          إلغاء
+          {t('cancel')}
         </button>
       </div>
       {!isNew && (
@@ -245,23 +249,23 @@ function StudentForm({ init, classes, onClose }: { init: Partial<Student>; class
             className="btn sm ghost grow"
             onClick={async () => {
               await setStudentActive(init.id!, !init.active);
-              ui.toast(init.active ? 'تمت أرشفة الطالب (يبقى سجله في التقارير)' : 'تمت استعادة الطالب');
+              ui.toast(init.active ? t('student_archived') : t('student_restored'));
               onClose();
             }}
           >
-            <IArchive /> {init.active ? 'أرشفة' : 'استعادة'}
+            <IArchive /> {init.active ? t('archive') : t('restore')}
           </button>
           <button
             className="btn sm danger grow"
             onClick={async () => {
-              if (await ui.confirm(`حذف «${init.name}» نهائيًا مع جميع سجلات حضوره؟ لا يمكن التراجع.`, { ok: 'حذف نهائي', danger: true })) {
+              if (await ui.confirm(t('confirm_delete_student', { name: init.name ?? '' }), { ok: t('delete_forever'), danger: true })) {
                 await deleteStudent(init.id!);
-                ui.toast('تم الحذف');
+                ui.toast(t('deleted'));
                 onClose();
               }
             }}
           >
-            <ITrash /> حذف نهائي
+            <ITrash /> {t('delete_forever')}
           </button>
         </div>
       )}
@@ -281,19 +285,19 @@ function ClassesTab({ classes }: { classes: ClassRoom[] }) {
   }, []);
   const add = async () => {
     if (!name.trim()) return;
-    if (classes.some((c) => c.name === name.trim())) return ui.toast('يوجد صف بنفس الاسم', true);
+    if (classes.some((c) => c.name === name.trim())) return ui.toast(t('class_exists'), true);
     await addClass(name);
     setName('');
-    ui.toast('تمت إضافة الصف');
+    ui.toast(t('class_added'));
   };
   return (
     <>
       <div className="card">
-        <h3>إضافة صف جديد</h3>
+        <h3>{t('add_class')}</h3>
         <div className="row">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: الصف الأول" onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('class_ph')} onKeyDown={(e) => e.key === 'Enter' && add()} />
           <button className="btn" onClick={add}>
-            <IPlus /> إضافة
+            <IPlus /> {t('add')}
           </button>
         </div>
       </div>
@@ -303,18 +307,18 @@ function ClassesTab({ classes }: { classes: ClassRoom[] }) {
             <div key={c.id} className="list-item">
               <div className="grow">
                 <b>{c.name}</b>
-                <div className="small muted">{counts?.get(c.id) ?? 0} طالب</div>
+                <div className="small muted">{t('n_students', { n: counts?.get(c.id) ?? 0 })}</div>
               </div>
-              <button className="ib" disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }} onClick={() => moveClassOrder(c.id, -1)} aria-label="أعلى">
+              <button className="ib" disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }} onClick={() => moveClassOrder(c.id, -1)} aria-label={t('up')}>
                 <IUp />
               </button>
-              <button className="ib" disabled={i === classes.length - 1} style={{ opacity: i === classes.length - 1 ? 0.3 : 1 }} onClick={() => moveClassOrder(c.id, 1)} aria-label="أسفل">
+              <button className="ib" disabled={i === classes.length - 1} style={{ opacity: i === classes.length - 1 ? 0.3 : 1 }} onClick={() => moveClassOrder(c.id, 1)} aria-label={t('down')}>
                 <IDown />
               </button>
-              <button className="ib" onClick={() => setEdit(c)} aria-label="تعديل">
+              <button className="ib" onClick={() => setEdit(c)} aria-label={t('edit')}>
                 <IEdit />
               </button>
-              <button className="ib" style={{ color: 'var(--bad)' }} onClick={() => setDel(c)} aria-label="حذف">
+              <button className="ib" style={{ color: 'var(--bad)' }} onClick={() => setDel(c)} aria-label={t('delete')}>
                 <ITrash />
               </button>
             </div>
@@ -323,7 +327,7 @@ function ClassesTab({ classes }: { classes: ClassRoom[] }) {
       )}
       {edit && (
         <Sheet onClose={() => setEdit(null)}>
-          <h2>تعديل اسم الصف</h2>
+          <h2>{t('rename_class')}</h2>
           <input autoFocus defaultValue={edit.name} id="cls-name" />
           <div className="acts">
             <button
@@ -334,10 +338,10 @@ function ClassesTab({ classes }: { classes: ClassRoom[] }) {
                 setEdit(null);
               }}
             >
-              حفظ
+              {t('save')}
             </button>
             <button className="btn ghost" onClick={() => setEdit(null)}>
-              إلغاء
+              {t('cancel')}
             </button>
           </div>
         </Sheet>
@@ -354,12 +358,12 @@ function DeleteClassSheet({ cls, classes, onClose }: { cls: ClassRoom; classes: 
   if (n === undefined) return null;
   return (
     <Sheet onClose={onClose}>
-      <h2>حذف «{cls.name}»</h2>
+      <h2>{t('delete_class', { name: cls.name })}</h2>
       {n > 0 ? (
         <>
-          <p className="muted">يحتوي هذا الصف على {n} طالب. اختر الصف الذي سيُنقلون إليه قبل الحذف (يبقى سجل حضورهم محفوظًا).</p>
+          <p className="muted">{t('class_has_students', { n })}</p>
           <select value={to} onChange={(e) => setTo(e.target.value)}>
-            <option value="">— اختر الصف —</option>
+            <option value="">{t('choose')}</option>
             {classes
               .filter((c) => c.id !== cls.id)
               .map((c) => (
@@ -370,7 +374,7 @@ function DeleteClassSheet({ cls, classes, onClose }: { cls: ClassRoom; classes: 
           </select>
         </>
       ) : (
-        <p className="muted">الصف فارغ، سيتم حذفه.</p>
+        <p className="muted">{t('class_empty')}</p>
       )}
       <div className="acts">
         <button
@@ -378,14 +382,14 @@ function DeleteClassSheet({ cls, classes, onClose }: { cls: ClassRoom; classes: 
           disabled={n > 0 && !to}
           onClick={async () => {
             await deleteClass(cls.id, to || undefined);
-            ui.toast('تم حذف الصف');
+            ui.toast(t('class_deleted'));
             onClose();
           }}
         >
-          حذف
+          {t('delete')}
         </button>
         <button className="btn ghost" onClick={onClose}>
-          إلغاء
+          {t('cancel')}
         </button>
       </div>
     </Sheet>
@@ -404,11 +408,11 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
     if (!f) return;
     try {
       const p = await parseExcel(f);
-      if (!p.rows.length) return ui.toast('الملف فارغ', true);
+      if (!p.rows.length) return ui.toast(t('file_empty'), true);
       setParsed(p);
       setMap(p.guess);
     } catch {
-      ui.toast('تعذّرت قراءة الملف', true);
+      ui.toast(t('file_error'), true);
     }
   };
 
@@ -428,7 +432,7 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
     setBusy(true);
     try {
       const res = await importStudents(rows, needDefault ? defCls || null : null);
-      ui.toast(`تم استيراد ${res.added} طالب${res.createdClasses ? ` وإنشاء ${res.createdClasses} صف` : ''}${res.skipped ? ` — تم تجاهل ${res.skipped} مكرر` : ''}`);
+      ui.toast(t('imported', { n: res.added }) + (res.createdClasses ? t('imported_classes', { n: res.createdClasses }) : '') + (res.skipped ? t('imported_skipped', { n: res.skipped }) : ''));
       onClose();
     } finally {
       setBusy(false);
@@ -439,7 +443,7 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
     <div>
       <label className="f">{label}</label>
       <select value={map[k]} onChange={(e) => setMap({ ...map, [k]: Number(e.target.value) })}>
-        <option value={-1}>— لا يوجد —</option>
+        <option value={-1}>{t('none')}</option>
         {parsed!.headers.map((h, i) => (
           <option key={i} value={i}>
             {h}
@@ -451,38 +455,38 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
 
   return (
     <Sheet onClose={onClose}>
-      <h2>استيراد الطلاب من Excel</h2>
+      <h2>{t('import_title')}</h2>
       {!parsed ? (
         <>
           <p className="muted small">
-            جهّز ملف Excel يحتوي عمود «اسم الطالب»، ويمكن إضافة أعمدة «الصف» و«الرقم» و«الجوال». إذا وُجد عمود الصف تُنشأ الصفوف غير الموجودة تلقائيًا.
+            {t('import_hint')}
           </p>
           <button className="btn block" onClick={choose}>
-            <IUpload /> اختيار ملف Excel
+            <IUpload /> {t('pick_excel')}
           </button>
           <div className="sp" />
           <button className="btn block light" onClick={downloadTemplate}>
-            تنزيل نموذج جاهز
+            {t('download_template')}
           </button>
         </>
       ) : (
         <>
-          <p className="small muted">تم العثور على {parsed.rows.length} صف. حدّد الأعمدة:</p>
-          <Col k="name" label="عمود اسم الطالب *" />
+          <p className="small muted">{t('found_rows', { n: parsed.rows.length })}</p>
+          <Col k="name" label={t('col_name')} />
           <div className="row">
             <div className="grow">
-              <Col k="className" label="عمود الصف" />
+              <Col k="className" label={t('col_class')} />
             </div>
             <div className="grow">
-              <Col k="serial" label="عمود الرقم" />
+              <Col k="serial" label={t('col_serial')} />
             </div>
           </div>
-          <Col k="phone" label="عمود الجوال" />
+          <Col k="phone" label={t('col_phone')} />
           {needDefault && (
             <>
-              <label className="f">الصف الافتراضي للطلاب بدون صف</label>
+              <label className="f">{t('default_class')}</label>
               <select value={defCls} onChange={(e) => setDefCls(e.target.value)}>
-                <option value="">— اختر —</option>
+                <option value="">{t('choose')}</option>
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -491,8 +495,8 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
               </select>
             </>
           )}
-          <div className="card" style={{ marginTop: 12, background: '#f7f9f8', boxShadow: 'none' }}>
-            <b>معاينة ({rows.length} طالب):</b>
+          <div className="card" style={{ marginTop: 12, background: 'var(--soft, #f7f9f8)', boxShadow: 'none' }}>
+            <b>{t('preview', { n: rows.length })}</b>
             {rows.slice(0, 5).map((r, i) => (
               <div key={i} className="small">
                 {r.serial ? r.serial + ' — ' : ''}
@@ -504,14 +508,97 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
           </div>
           <div className="acts">
             <button className="btn" disabled={busy || !rows.length || map.name < 0 || (needDefault && !defCls && map.className < 0)} onClick={doImport}>
-              استيراد {rows.length} طالب
+              {t('import_n', { n: rows.length })}
             </button>
             <button className="btn ghost" onClick={() => setParsed(null)}>
-              ملف آخر
+              {t('other_file')}
             </button>
           </div>
         </>
       )}
     </Sheet>
+  );
+}
+
+function ActivitiesTab() {
+  const ui = useUI();
+  const [name, setName] = useState('');
+  const [edit, setEdit] = useState<Activity | null>(null);
+  const list = useLiveQuery(() => db.activities.orderBy('order').toArray(), []);
+  if (!list) return null;
+  const add = async () => {
+    if (!name.trim()) return;
+    if (list.some((a) => a.name === name.trim())) return ui.toast(t('activity_exists'), true);
+    await addActivity(name);
+    setName('');
+    ui.toast(t('activity_added'));
+  };
+  return (
+    <>
+      <p className="small muted">{t('activities_hint')}</p>
+      <div className="card">
+        <h3>{t('add_activity')}</h3>
+        <div className="row">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('activity_ph')} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <button className="btn" onClick={add}>
+            <IPlus /> {t('add')}
+          </button>
+        </div>
+      </div>
+      {list.length === 0 ? (
+        <Empty text={t('no_activities')} />
+      ) : (
+        <div className="card" style={{ padding: '4px 14px' }}>
+          {list.map((a, i) => (
+            <div key={a.id} className="list-item">
+              <b className="grow">{a.name}</b>
+              <button className="ib" disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }} onClick={() => moveActivityOrder(a.id, -1)} aria-label={t('up')}>
+                <IUp />
+              </button>
+              <button className="ib" disabled={i === list.length - 1} style={{ opacity: i === list.length - 1 ? 0.3 : 1 }} onClick={() => moveActivityOrder(a.id, 1)} aria-label={t('down')}>
+                <IDown />
+              </button>
+              <button className="ib" onClick={() => setEdit(a)} aria-label={t('edit')}>
+                <IEdit />
+              </button>
+              <button
+                className="ib"
+                style={{ color: 'var(--bad)' }}
+                aria-label={t('delete')}
+                onClick={async () => {
+                  if (await ui.confirm(t('confirm_delete_activity', { name: a.name }), { ok: t('delete'), danger: true })) {
+                    await deleteActivity(a.id);
+                    ui.toast(t('activity_deleted'));
+                  }
+                }}
+              >
+                <ITrash />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {edit && (
+        <Sheet onClose={() => setEdit(null)}>
+          <h2>{t('rename_activity')}</h2>
+          <input autoFocus defaultValue={edit.name} id="act-name" />
+          <div className="acts">
+            <button
+              className="btn"
+              onClick={async () => {
+                const v = (document.getElementById('act-name') as HTMLInputElement).value;
+                if (v.trim()) await renameActivity(edit.id, v);
+                setEdit(null);
+              }}
+            >
+              {t('save')}
+            </button>
+            <button className="btn ghost" onClick={() => setEdit(null)}>
+              {t('cancel')}
+            </button>
+          </div>
+        </Sheet>
+      )}
+    </>
   );
 }

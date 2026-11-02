@@ -1,12 +1,13 @@
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { t } from '../i18n';
 
 /** حفظ/مشاركة ملف. على الهاتف يفتح نافذة المشاركة (حفظ في الملفات، واتساب، بريد...) */
 export async function saveFile(base64: string, filename: string, mime: string) {
   if (Capacitor.isNativePlatform()) {
     const res = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache, recursive: true });
-    await Share.share({ title: filename, files: [res.uri], dialogTitle: 'حفظ أو مشاركة الملف' });
+    await Share.share({ title: filename, files: [res.uri], dialogTitle: t('save_share') });
     return;
   }
   const bin = atob(base64);

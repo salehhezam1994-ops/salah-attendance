@@ -5,6 +5,7 @@ import { createUser, setSetting, verifyPin } from '../db/repo';
 import { IMosque } from '../components/Icons';
 import { JoinSchool } from '../sync/SyncUI';
 import { syncAvailable } from '../sync/sync';
+import { t, LangSwitch } from '../i18n';
 
 function PinPad({ value, onChange, len = 4 }: { value: string; onChange: (v: string) => void; len?: number }) {
   return (
@@ -33,7 +34,7 @@ function Logo({ sub }: { sub: string }) {
   return (
     <div className="logo">
       <IMosque />
-      <h1>متابعة حضور الصلاة</h1>
+      <h1>{t('app_full')}</h1>
       <p>{sub}</p>
     </div>
   );
@@ -55,13 +56,13 @@ export function Setup({ onDone }: { onDone: (id: string) => void }) {
   useEffect(() => {
     if (step === 2 && pin2.length === 4) {
       if (pin2 !== pin) {
-        setErr('الرمزان غير متطابقين، أعد المحاولة');
+        setErr(t('pin_mismatch'));
         setPin('');
         setPin2('');
         setStep(1);
       } else {
         (async () => {
-          const u = await createUser(name || 'المسؤول', pin, 'admin');
+          const u = await createUser(name || t('admin_default'), pin, 'admin');
           if (org.trim()) await setSetting('org', org.trim());
           onDone(u.id);
         })();
@@ -71,29 +72,30 @@ export function Setup({ onDone }: { onDone: (id: string) => void }) {
 
   return (
     <div className="auth">
-      <Logo sub="الإعداد الأول للتطبيق" />
+      <Logo sub={t('setup_sub')} />
+      <LangSwitch />
       {joining ? (
         <JoinSchool onCancel={() => setJoining(false)} />
       ) : (
       <div className="card">
         {step === 0 && (
           <>
-            <h3>إنشاء حساب مسؤول التطبيق</h3>
-            <label className="f">اسم المدرسة / الحلقة / الجهة (يظهر في التقارير)</label>
-            <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="مثال: مدرسة تحفيظ القرآن" />
-            <label className="f">اسم المسؤول</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="الاسم" />
+            <h3>{t('create_admin')}</h3>
+            <label className="f">{t('org_label')}</label>
+            <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder={t('org_example')} />
+            <label className="f">{t('admin_name')}</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('name_ph')} />
             <div className="sp" />
             <button className="btn block" disabled={!name.trim()} onClick={() => setStep(1)}>
-              التالي: رمز الدخول
+              {t('next_pin')}
             </button>
             {syncAvailable() && (
               <>
                 <div className="center small muted" style={{ margin: '14px 0 8px' }}>
-                  — أو —
+                  {t('or')}
                 </div>
                 <button className="btn block light" onClick={() => setJoining(true)}>
-                  أنا مشرف: الانضمام إلى مدرسة برمز
+                  {t('join_btn')}
                 </button>
               </>
             )}
@@ -101,7 +103,7 @@ export function Setup({ onDone }: { onDone: (id: string) => void }) {
         )}
         {step > 0 && (
           <>
-            <h3 className="center">{step === 1 ? 'اختر رمز دخول من 4 أرقام' : 'أعد إدخال الرمز للتأكيد'}</h3>
+            <h3 className="center">{step === 1 ? t('choose_pin') : t('repeat_pin')}</h3>
             {err && <p className="center small" style={{ color: 'var(--bad)' }}>{err}</p>}
             {step === 1 ? <PinPad value={pin} onChange={setPin} /> : <PinPad value={pin2} onChange={setPin2} />}
           </>
@@ -130,7 +132,7 @@ export function Login({ onLogin }: { onLogin: (id: string) => void }) {
       verifyPin(sel, pin).then((u) => {
         if (u) onLogin(u.id);
         else {
-          setErr('رمز الدخول غير صحيح');
+          setErr(t('wrong_pin'));
           setPin('');
         }
       });
@@ -141,17 +143,18 @@ export function Login({ onLogin }: { onLogin: (id: string) => void }) {
   const selected = users.find((u) => u.id === sel);
   return (
     <div className="auth">
-      <Logo sub="تسجيل الدخول" />
+      <Logo sub={t('login_sub')} />
+      <LangSwitch />
       <div className="card">
         {!selected ? (
           <>
-            <h3>اختر المستخدم</h3>
+            <h3>{t('choose_user')}</h3>
             {users.map((u) => (
               <button key={u.id} className="list-item" style={{ width: '100%' }} onClick={() => setSel(u.id)}>
                 <span className="avatar">{u.name.trim()[0]}</span>
-                <span className="grow" style={{ textAlign: 'right', fontWeight: 700 }}>
+                <span className="grow" style={{ textAlign: 'start', fontWeight: 700 }}>
                   {u.name}
-                  <div className="small muted">{u.role === 'admin' ? 'مسؤول التطبيق' : 'مشرف'}</div>
+                  <div className="small muted">{u.role === 'admin' ? t('role_admin') : t('role_sup')}</div>
                 </span>
               </button>
             ))}
@@ -163,12 +166,12 @@ export function Login({ onLogin }: { onLogin: (id: string) => void }) {
               <b className="grow">{selected.name}</b>
               {users.length > 1 && (
                 <button className="btn sm ghost" onClick={() => (setSel(null), setAuto(false), setPin(''), setErr(''))}>
-                  تغيير
+                  {t('change')}
                 </button>
               )}
             </div>
             <p className="center muted small" style={{ marginBottom: 0 }}>
-              أدخل رمز الدخول
+              {t('enter_pin')}
             </p>
             {err && <p className="center small" style={{ color: 'var(--bad)', margin: 4 }}>{err}</p>}
             <PinPad value={pin} onChange={(v) => (setErr(''), setPin(v))} />

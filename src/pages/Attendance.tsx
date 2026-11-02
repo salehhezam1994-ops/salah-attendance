@@ -1,30 +1,35 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
-import { db, PRAYERS, PRAYER_NAMES, type Attendance, type Student } from '../db/schema';
+import { db, PRAYERS, isPrayerSlot, type Attendance, type Slot, type Student } from '../db/schema';
 import { markAll, clearSession, setNote, setStatus } from '../db/repo';
 import { useSel } from '../App';
 import { useAuth } from '../auth';
 import { DateBar, Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
 import { IAllCheck, ICheck, INote, IReset, ISearch, IUsers, IX } from '../components/Icons';
-import { todayISO } from '../lib/dates';
+import { guessPrayer, todayISO } from '../lib/dates';
 import { SyncDot } from '../sync/SyncUI';
+import { t, type Key } from '../i18n';
+import { PRAYER_GROUP, groupName, groupSlots, slotGroup, slotName, useActivities } from '../lib/slots';
 
-const REASONS = ['مريض', 'مسافر', 'استئذان', 'ظرف عائلي', 'صلّى في مسجد آخر'];
+const REASONS: Key[] = ['reason_sick', 'reason_travel', 'reason_permission', 'reason_family', 'reason_other_mosque'];
 
 export default function AttendancePage() {
-  const { date, prayer, classId, set } = useSel();
+  const { date, slot, classId, set } = useSel();
   const { user, isAdmin, allowedClasses } = useAuth();
   const ui = useUI();
   const [q, setQ] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [noteFor, setNoteFor] = useState<Student | null>(null);
+  const acts = useActivities();
 
   const classes = useLiveQuery(async () => allowedClasses(await db.classes.orderBy('order').toArray()), [user.id]);
   const students = useLiveQuery(() => db.students.where('active').equals(1).toArray(), []);
-  const recs = useLiveQuery(() => db.attendance.where('[date+prayer]').equals([date, prayer]).toArray(), [date, prayer]);
+  const recs = useLiveQuery(() => db.attendance.where('[date+prayer]').equals([date, slot]).toArray(), [date, slot]);
   const dayRecs = useLiveQuery(() => db.attendance.where('date').equals(date).toArray(), [date]);
 
+  const group = slotGroup(slot);
+  const slots = groupSlots(group);
   const activeClass = classes?.find((c) => c.id === classId) ?? classes?.[0];
   const recMap = useMemo(() => new Map((recs ?? []).map((r) => [r.studentId, r])), [recs]);
 
@@ -45,58 +50,60 @@ export default function AttendancePage() {
   const absent = list.filter((s) => recMap.get(s.id)?.status === 'A').length;
   const unmarked = list.length - present - absent;
 
-  // هل اكتمل تسجيل صلاة معينة للصف الحالي؟ (لعرض نقطة خضراء)
-  const prayerDone = useMemo(() => {
+  // هل اكتمل تسجيل وقت معين للصف الحالي؟ (نقطة خضراء)
+  const slotDone = useMemo(() => {
     const ids = new Set(list.map((s) => s.id));
     const out: Record<string, boolean> = {};
-    for (const p of PRAYERS) {
+    for (const p of slots) {
       const n = (dayRecs ?? []).filter((r) => r.prayer === p && ids.has(r.studentId)).length;
       out[p] = ids.size > 0 && n >= ids.size;
     }
     return out;
-  }, [dayRecs, list]);
+  }, [dayRecs, list, slots]);
 
   const readOnly = !isAdmin && !user.perms.editPastDays && date !== todayISO();
 
   if (!classes || !students) return null;
 
   const toggle = async (s: Student, to?: 'P' | 'A') => {
-    if (readOnly) return ui.toast('لا تملك صلاحية تعديل الأيام السابقة', true);
+    if (readOnly) return ui.toast(t('no_perm_past'), true);
     const cur = recMap.get(s.id)?.status;
     const next = to ?? (cur === 'P' ? 'A' : 'P');
     if (navigator.vibrate) navigator.vibrate(12);
-    await setStatus(date, prayer, s, cur === next && to ? null : next, user.id);
+    await setStatus(date, slot, s, cur === next && to ? null : next, user.id);
   };
 
   const allPresent = async () => {
-    if (readOnly) return ui.toast('لا تملك صلاحية تعديل الأيام السابقة', true);
+    if (readOnly) return ui.toast(t('no_perm_past'), true);
     if (unmarked > 0) {
-      await markAll(date, prayer, list, 'P', false, user.id);
-      ui.toast(`تم تحديد ${unmarked} طالبًا حاضرًا — حدّد الغائبين فقط`);
-    } else if (absent > 0 && (await ui.confirm('سيتم تحويل جميع الغائبين إلى حاضرين وحذف ملاحظاتهم. هل أنت متأكد؟', { ok: 'نعم، الجميع حاضر' }))) {
-      await markAll(date, prayer, list, 'P', true, user.id);
+      await markAll(date, slot, list, 'P', false, user.id);
+      ui.toast(t('toast_marked', { n: unmarked }));
+    } else if (absent > 0 && (await ui.confirm(t('confirm_all_present'), { ok: t('ok_all_present') }))) {
+      await markAll(date, slot, list, 'P', true, user.id);
     }
   };
 
   const reset = async () => {
     if (readOnly) return;
-    if (await ui.confirm(`مسح تسجيل ${PRAYER_NAMES[prayer]} لصف «${activeClass?.name}» في هذا التاريخ؟`, { ok: 'مسح', danger: true })) {
-      await clearSession(date, prayer, list);
+    if (await ui.confirm(t('confirm_clear', { slot: slotName(slot), cls: activeClass?.name ?? '' }), { ok: t('clear'), danger: true })) {
+      await clearSession(date, slot, list);
     }
   };
 
+  const chooseGroup = (g: string) => set({ slot: g === PRAYER_GROUP ? guessPrayer() : groupSlots(g)[0] });
   const nextClass = classes[classes.findIndex((c) => c.id === activeClass?.id) + 1];
+  const hasActs = (acts?.length ?? 0) > 0;
 
   return (
     <>
       <header className="topbar">
-        <h1>تسجيل الحضور</h1>
+        <h1>{t('att_title')}</h1>
         <SyncDot />
-        <button className="ib" onClick={() => (setShowSearch((v) => !v), setQ(''))} aria-label="بحث">
+        <button className="ib" onClick={() => (setShowSearch((v) => !v), setQ(''))} aria-label={t('search')}>
           <ISearch />
         </button>
         {list.length > 0 && !readOnly && (
-          <button className="ib" onClick={reset} aria-label="مسح التسجيل">
+          <button className="ib" onClick={reset} aria-label={t('clear_aria')}>
             <IReset />
           </button>
         )}
@@ -104,20 +111,33 @@ export default function AttendancePage() {
       <main className="content">
         <DateBar value={date} onChange={(d) => set({ date: d })} />
         <div className="sp" />
-        <div className="seg">
-          {PRAYERS.map((p) => (
-            <button key={p} className={p === prayer ? 'on' : ''} onClick={() => set({ prayer: p })}>
-              {prayerDone[p] && <span className="dot" />}
-              {PRAYER_NAMES[p]}
-            </button>
-          ))}
-        </div>
-        <div className="sp" />
+        {hasActs && (
+          <div className="tabs" style={{ marginBottom: 8 }}>
+            {[PRAYER_GROUP, ...acts!.map((a) => a.id)].map((g) => (
+              <button key={g} className={group === g ? 'on' : ''} onClick={() => chooseGroup(g)}>
+                {groupName(g)}
+              </button>
+            ))}
+          </div>
+        )}
+        {isPrayerSlot(slot) && (
+          <>
+            <div className="seg">
+              {PRAYERS.map((p) => (
+                <button key={p} className={p === slot ? 'on' : ''} onClick={() => set({ slot: p })}>
+                  {slotDone[p] && <span className="dot" />}
+                  {slotName(p)}
+                </button>
+              ))}
+            </div>
+            <div className="sp" />
+          </>
+        )}
         {classes.length === 0 ? (
-          <Empty icon={<IUsers />} text={isAdmin ? 'لا توجد صفوف بعد. ابدأ بإضافة الصفوف والطلاب.' : 'لم تُمنح صلاحية على أي صف.'}>
+          <Empty icon={<IUsers />} text={isAdmin ? t('no_classes_admin') : t('no_classes_sup')}>
             {isAdmin && (
               <Link to="/students" className="btn">
-                إدارة الصفوف والطلاب
+                {t('manage_classes')}
               </Link>
             )}
           </Empty>
@@ -143,19 +163,19 @@ export default function AttendancePage() {
             <div className="stats3">
               <div className="stat ok">
                 <b>{present}</b>
-                <span>حاضر</span>
+                <span>{t('present')}</span>
               </div>
               <div className="stat bad">
                 <b>{absent}</b>
-                <span>غائب</span>
+                <span>{t('absent')}</span>
               </div>
               <div className="stat un">
                 <b>{unmarked}</b>
-                <span>لم يُحدَّد</span>
+                <span>{t('unmarked')}</span>
               </div>
             </div>
             <div className="sp" />
-            {readOnly && <p className="pill warn">عرض فقط — لا تملك صلاحية تعديل الأيام السابقة</p>}
+            {readOnly && <p className="pill warn">{t('readonly_banner')}</p>}
             {showSearch && (
               <>
                 <SearchBox value={q} onChange={setQ} />
@@ -164,7 +184,7 @@ export default function AttendancePage() {
             )}
 
             {list.length === 0 ? (
-              <Empty icon={<IUsers />} text="لا يوجد طلاب في هذا الصف." />
+              <Empty icon={<IUsers />} text={t('no_students_class')} />
             ) : (
               <div className="att-list">
                 {shown.map((s) => (
@@ -176,14 +196,12 @@ export default function AttendancePage() {
             {list.length > 0 && !readOnly && (
               <div className="actionbar">
                 {unmarked === 0 && nextClass ? (
-                  <>
-                    <button className="btn ok grow" onClick={() => set({ classId: nextClass.id })}>
-                      ✓ تم — الصف التالي: {nextClass.name}
-                    </button>
-                  </>
+                  <button className="btn ok grow" onClick={() => set({ classId: nextClass.id })}>
+                    {t('next_class', { name: nextClass.name })}
+                  </button>
                 ) : (
                   <button className="btn ok grow" onClick={allPresent} disabled={unmarked === 0 && absent === 0}>
-                    <IAllCheck /> {unmarked > 0 ? `تحديد الباقين حاضرين (${unmarked})` : 'تحديد الجميع حاضرًا'}
+                    <IAllCheck /> {unmarked > 0 ? t('mark_rest', { n: unmarked }) : t('mark_all')}
                   </button>
                 )}
               </div>
@@ -191,11 +209,19 @@ export default function AttendancePage() {
           </>
         )}
       </main>
-      {noteFor && <NoteSheet s={noteFor} r={recMap.get(noteFor.id)} onClose={() => setNoteFor(null)} onSave={async (note, exc) => {
-        await setNote(date, prayer, noteFor, note, exc, user.id);
-        setNoteFor(null);
-        ui.toast('تم حفظ الملاحظة');
-      }} />}
+      {noteFor && (
+        <NoteSheet
+          s={noteFor}
+          slot={slot}
+          r={recMap.get(noteFor.id)}
+          onClose={() => setNoteFor(null)}
+          onSave={async (note, exc) => {
+            await setNote(date, slot, noteFor, note, exc, user.id);
+            setNoteFor(null);
+            ui.toast(t('note_saved'));
+          }}
+        />
+      )}
     </>
   );
 }
@@ -207,18 +233,23 @@ function Row({ s, r, onToggle, onNote }: { s: Student; r?: Attendance; onToggle:
       <span className="num">{s.serial}</span>
       <div className="nm" onClick={() => onToggle(s)}>
         {s.name}
-        {st === 'A' && (r?.note || r?.excused) ? <small className="n">{r.excused ? 'بعذر' : ''}{r.note ? (r.excused ? ' — ' : '') + r.note : ''}</small> : null}
+        {st === 'A' && (r?.note || r?.excused) ? (
+          <small className="n">
+            {r.excused ? t('excused') : ''}
+            {r.note ? (r.excused ? ' — ' : '') + r.note : ''}
+          </small>
+        ) : null}
       </div>
       {st === 'A' && (
-        <button className={'ib note' + (r?.note || r?.excused ? ' has' : '')} onClick={onNote} aria-label="ملاحظة">
+        <button className={'ib note' + (r?.note || r?.excused ? ' has' : '')} onClick={onNote} aria-label={t('note_aria')}>
           <INote />
         </button>
       )}
       <div className="tog">
-        <button className={'p' + (st === 'P' ? ' on' : '')} onClick={() => onToggle(s, 'P')} aria-label="حاضر">
+        <button className={'p' + (st === 'P' ? ' on' : '')} onClick={() => onToggle(s, 'P')} aria-label={t('present')}>
           <ICheck />
         </button>
-        <button className={'a' + (st === 'A' ? ' on' : '')} onClick={() => onToggle(s, 'A')} aria-label="غائب">
+        <button className={'a' + (st === 'A' ? ' on' : '')} onClick={() => onToggle(s, 'A')} aria-label={t('absent')}>
           <IX />
         </button>
       </div>
@@ -226,32 +257,35 @@ function Row({ s, r, onToggle, onNote }: { s: Student; r?: Attendance; onToggle:
   );
 }
 
-function NoteSheet({ s, r, onClose, onSave }: { s: Student; r?: Attendance; onClose: () => void; onSave: (note: string, excused: boolean) => void }) {
+function NoteSheet({ s, slot, r, onClose, onSave }: { s: Student; slot: Slot; r?: Attendance; onClose: () => void; onSave: (note: string, excused: boolean) => void }) {
   const [note, setNoteV] = useState(r?.note ?? '');
   const [exc, setExc] = useState(!!r?.excused);
+  const reasons = isPrayerSlot(slot) ? REASONS : REASONS.slice(0, 4);
   return (
     <Sheet onClose={onClose}>
-      <h2>ملاحظة غياب</h2>
-      <p className="muted" style={{ marginTop: 0 }}>{s.name}</p>
+      <h2>{t('note_title')}</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        {s.name} — {slotName(slot)}
+      </p>
       <div className="row wrap">
-        {REASONS.map((x) => (
-          <button key={x} className={'chip' + (note === x ? ' on' : '')} onClick={() => (setNoteV(x), setExc(true))}>
-            {x}
+        {reasons.map((k) => (
+          <button key={k} className={'chip' + (note === t(k) ? ' on' : '')} onClick={() => (setNoteV(t(k)), setExc(true))}>
+            {t(k)}
           </button>
         ))}
       </div>
-      <label className="f">الملاحظة / العذر</label>
-      <textarea rows={2} value={note} onChange={(e) => setNoteV(e.target.value)} placeholder="اكتب ملاحظة (اختياري)" />
+      <label className="f">{t('note_label')}</label>
+      <textarea rows={2} value={note} onChange={(e) => setNoteV(e.target.value)} placeholder={t('note_ph')} />
       <label className="check">
         <input type="checkbox" checked={exc} onChange={(e) => setExc(e.target.checked)} />
-        غياب بعذر مقبول
+        {t('excused_ok')}
       </label>
       <div className="acts">
         <button className="btn" onClick={() => onSave(note, exc)}>
-          حفظ
+          {t('save')}
         </button>
         <button className="btn ghost" onClick={onClose}>
-          إلغاء
+          {t('cancel')}
         </button>
       </div>
     </Sheet>

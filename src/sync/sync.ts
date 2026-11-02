@@ -31,6 +31,7 @@ import {
 import Dexie, { type Table, type Transaction } from 'dexie';
 import { db, LOCAL_SETTINGS, SYNC_TABLES, type OutboxItem, type SyncTable } from '../db/schema';
 import { firebaseConfig, useEmulator } from '../firebaseConfig';
+import { t } from '../i18n';
 
 export const syncAvailable = () => !!firebaseConfig;
 
@@ -118,7 +119,7 @@ export function subscribeSync(fn: (s: SyncState) => void) {
 }
 
 async function ensureFirebase() {
-  if (!firebaseConfig) throw new Error('المزامنة غير مفعّلة في هذا الإصدار');
+  if (!firebaseConfig) throw new Error(t('err_sync_disabled'));
   if (!app) {
     app = initializeApp(firebaseConfig);
     fs = initializeFirestore(app, { ignoreUndefinedProperties: true, experimentalAutoDetectLongPolling: true });
@@ -289,14 +290,14 @@ export async function createSchool() {
 /** انضمام جهاز جديد إلى مدرسة موجودة: يستبدل البيانات المحلية ببيانات المدرسة */
 export async function joinSchool(rawCode: string) {
   const code = normCode(rawCode);
-  if (code.length < 8) throw new Error('الرمز غير صحيح');
+  if (code.length < 8) throw new Error(t('err_bad_code'));
   setState({ loading: true, error: null });
   try {
     const f = await ensureFirebase();
     const probe = await getDocs(query(collection(f, 'schools', code, 'users'), limit(1)));
-    if (probe.empty) throw new Error('لم يتم العثور على مدرسة بهذا الرمز');
+    if (probe.empty) throw new Error(t('err_no_school'));
     stopListening();
-    await remoteTx(['classes', 'students', 'attendance', 'users', 'settings', 'outbox'], async () => {
+    await remoteTx([...SYNC_TABLES, 'outbox'], async () => {
       await Promise.all(SYNC_TABLES.map((t) => tbl(t).clear()));
       await db.outbox.clear();
     });

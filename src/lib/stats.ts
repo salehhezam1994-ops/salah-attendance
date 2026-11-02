@@ -1,12 +1,12 @@
-import { db, PRAYERS, type Attendance, type ClassRoom, type Prayer, type Student } from '../db/schema';
+import { db, type Attendance, type ClassRoom, type Slot, type Student } from '../db/schema';
 import { pct } from './dates';
 
 export interface Scope {
   from: string;
   to: string;
+  slots: Slot[]; // الأوقات المشمولة (الصلوات الخمس أو نشاط واحد)
   classIds?: string[] | null; // null = جميع الصفوف
   studentId?: string | null;
-  prayers?: Prayer[] | null;
 }
 
 export interface StudentStat {
@@ -17,14 +17,14 @@ export interface StudentStat {
   excused: number; // ضمن الغياب
   recorded: number;
   rate: number; // نسبة الالتزام %
-  perPrayerAbsent: Record<Prayer, number>;
-  perPrayerRecorded: Record<Prayer, number>;
-  mostMissed: Prayer | null;
+  perSlotAbsent: Record<Slot, number>;
+  perSlotRecorded: Record<Slot, number>;
+  mostMissed: Slot | null;
   absences: Attendance[];
 }
 
-export interface PrayerStat {
-  prayer: Prayer;
+export interface SlotStat {
+  slot: Slot;
   recorded: number;
   present: number;
   absent: number;
@@ -32,7 +32,7 @@ export interface PrayerStat {
   rate: number;
 }
 
-export interface DayPrayerCell {
+export interface DayCell {
   present: number;
   absent: number;
   absentIds: string[];
@@ -46,13 +46,13 @@ export interface Report {
   classMap: Map<string, ClassRoom>;
   studentMap: Map<string, Student>;
   totals: { students: number; recorded: number; present: number; absent: number; excused: number; rate: number };
-  byPrayer: PrayerStat[];
+  bySlot: SlotStat[];
   byStudent: StudentStat[];
-  byDate: Map<string, Partial<Record<Prayer, DayPrayerCell>>>;
+  byDate: Map<string, Partial<Record<Slot, DayCell>>>;
   byClass: { cls: ClassRoom; students: number; present: number; absent: number; rate: number }[];
 }
 
-const emptyPrayerRec = (): Record<Prayer, number> => ({ fajr: 0, dhuhr: 0, asr: 0, maghrib: 0, isha: 0 });
+const zero = (slots: Slot[]) => Object.fromEntries(slots.map((s) => [s, 0])) as Record<Slot, number>;
 
 export async function buildReport(scope: Scope): Promise<Report> {
   const [classes, allStudents] = await Promise.all([db.classes.orderBy('order').toArray(), db.students.toArray()]);
@@ -65,10 +65,9 @@ export async function buildReport(scope: Scope): Promise<Report> {
   } else {
     records = await db.attendance.where('date').between(scope.from, scope.to, true, true).toArray();
   }
+  const slotSet = new Set(scope.slots);
   const classSet = scope.classIds && scope.classIds.length ? new Set(scope.classIds) : null;
-  const prayerSet = scope.prayers && scope.prayers.length ? new Set(scope.prayers) : null;
-  if (classSet) records = records.filter((r) => classSet.has(r.classId));
-  if (prayerSet) records = records.filter((r) => prayerSet.has(r.prayer));
+  records = records.filter((r) => slotSet.has(r.prayer) && (!classSet || classSet.has(r.classId)));
 
   const classMap = new Map(classes.map((c) => [c.id, c]));
   const studentMap = new Map(allStudents.map((s) => [s.id, s]));
@@ -99,14 +98,14 @@ export async function buildReport(scope: Scope): Promise<Report> {
       excused: 0,
       recorded: 0,
       rate: 0,
-      perPrayerAbsent: emptyPrayerRec(),
-      perPrayerRecorded: emptyPrayerRec(),
+      perSlotAbsent: zero(scope.slots),
+      perSlotRecorded: zero(scope.slots),
       mostMissed: null,
       absences: [],
     });
   }
-  const pMap = new Map<Prayer, PrayerStat>(PRAYERS.map((p) => [p, { prayer: p, recorded: 0, present: 0, absent: 0, excused: 0, rate: 0 }]));
-  const byDate = new Map<string, Partial<Record<Prayer, DayPrayerCell>>>();
+  const pMap = new Map<Slot, SlotStat>(scope.slots.map((p) => [p, { slot: p, recorded: 0, present: 0, absent: 0, excused: 0, rate: 0 }]));
+  const byDate = new Map<string, Partial<Record<Slot, DayCell>>>();
   const classAgg = new Map<string, { present: number; absent: number; students: Set<string> }>();
 
   let present = 0,
@@ -118,7 +117,7 @@ export async function buildReport(scope: Scope): Promise<Report> {
     const ps = pMap.get(r.prayer)!;
     ps.recorded++;
     st.recorded++;
-    st.perPrayerRecorded[r.prayer]++;
+    st.perSlotRecorded[r.prayer]++;
     let day = byDate.get(r.date);
     if (!day) byDate.set(r.date, (day = {}));
     const cell = (day[r.prayer] ??= { present: 0, absent: 0, absentIds: [] });
@@ -135,7 +134,7 @@ export async function buildReport(scope: Scope): Promise<Report> {
       absent++;
       ps.absent++;
       st.absent++;
-      st.perPrayerAbsent[r.prayer]++;
+      st.perSlotAbsent[r.prayer]++;
       st.absences.push(r);
       cell.absent++;
       cell.absentIds.push(r.studentId);
@@ -148,12 +147,13 @@ export async function buildReport(scope: Scope): Promise<Report> {
     }
   }
   for (const ps of pMap.values()) ps.rate = pct(ps.present, ps.recorded);
+  const order = (s: Slot) => scope.slots.indexOf(s);
   for (const st of stMap.values()) {
     st.rate = pct(st.present, st.recorded);
-    let best: Prayer | null = null;
-    for (const p of PRAYERS) if (st.perPrayerAbsent[p] > 0 && (!best || st.perPrayerAbsent[p] > st.perPrayerAbsent[best])) best = p;
-    st.mostMissed = best;
-    st.absences.sort((a, b) => (a.date === b.date ? PRAYERS.indexOf(a.prayer) - PRAYERS.indexOf(b.prayer) : a.date < b.date ? 1 : -1));
+    let best: Slot | null = null;
+    for (const p of scope.slots) if (st.perSlotAbsent[p] > 0 && (!best || st.perSlotAbsent[p] > st.perSlotAbsent[best])) best = p;
+    st.mostMissed = scope.slots.length > 1 ? best : null;
+    st.absences.sort((a, b) => (a.date === b.date ? order(a.prayer) - order(b.prayer) : a.date < b.date ? 1 : -1));
   }
   const byClass = classes
     .filter((c) => classAgg.has(c.id))
@@ -170,7 +170,7 @@ export async function buildReport(scope: Scope): Promise<Report> {
     classMap,
     studentMap,
     totals: { students: students.length, recorded: present + absent, present, absent, excused, rate: pct(present, present + absent) },
-    byPrayer: [...pMap.values()],
+    bySlot: [...pMap.values()],
     byStudent: [...stMap.values()],
     byDate,
     byClass,

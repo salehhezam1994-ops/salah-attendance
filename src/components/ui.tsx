@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { IChevL, IChevR, ISearch } from './Icons';
 import { addDays, dayName, fmtDate, hijri, todayISO } from '../lib/dates';
+import { t } from '../i18n';
 
 // ---------- Toast + Confirm ----------
 interface UI {
@@ -11,7 +12,7 @@ const UICtx = createContext<UI>(null as never);
 export const useUI = () => useContext(UICtx);
 
 export function UIProvider({ children }: { children: ReactNode }) {
-  const [t, setT] = useState<{ msg: string; err?: boolean } | null>(null);
+  const [tst, setT] = useState<{ msg: string; err?: boolean } | null>(null);
   const timer = useRef<number>();
   const [c, setC] = useState<{ msg: string; ok: string; danger?: boolean; title?: string; resolve: (v: boolean) => void } | null>(null);
   const toast = useCallback((msg: string, err?: boolean) => {
@@ -21,7 +22,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   }, []);
   const confirm = useCallback(
     (msg: string, opts?: { ok?: string; danger?: boolean; title?: string }) =>
-      new Promise<boolean>((resolve) => setC({ msg, ok: opts?.ok ?? 'تأكيد', danger: opts?.danger, title: opts?.title, resolve })),
+      new Promise<boolean>((resolve) => setC({ msg, ok: opts?.ok ?? t('confirm'), danger: opts?.danger, title: opts?.title, resolve })),
     [],
   );
   const close = (v: boolean) => {
@@ -31,17 +32,17 @@ export function UIProvider({ children }: { children: ReactNode }) {
   return (
     <UICtx.Provider value={{ toast, confirm }}>
       {children}
-      {t && <div className={'toast' + (t.err ? ' err' : '')}>{t.msg}</div>}
+      {tst && <div className={'toast' + (tst.err ? ' err' : '')}>{tst.msg}</div>}
       {c && (
         <Sheet onClose={() => close(false)}>
-          <h2>{c.title ?? 'تأكيد'}</h2>
+          <h2>{c.title ?? t('confirm_title')}</h2>
           <p className="muted">{c.msg}</p>
           <div className="acts">
             <button className={'btn ' + (c.danger ? 'danger' : '')} onClick={() => close(true)}>
               {c.ok}
             </button>
             <button className="btn ghost" onClick={() => close(false)}>
-              إلغاء
+              {t('cancel')}
             </button>
           </div>
         </Sheet>
@@ -73,16 +74,16 @@ export function DateBar({ value, onChange, max }: { value: string; onChange: (v:
   const lim = max ?? todayISO();
   return (
     <div className="datebar">
-      <button className="ib" onClick={() => onChange(addDays(value, -1))} aria-label="اليوم السابق">
+      <button className="ib flip" onClick={() => onChange(addDays(value, -1))} aria-label={t('prev_day')}>
         <IChevR />
       </button>
       <div className="d">
         {dayName(value)} {fmtDate(value, false)}
-        {isToday && <span className="today-tag">اليوم</span>}
+        {isToday && <span className="today-tag">{t('today')}</span>}
         <small>{hijri(value)}</small>
         <input type="date" value={value} max={lim} onChange={(e) => e.target.value && onChange(e.target.value)} />
       </div>
-      <button className="ib" disabled={value >= lim} style={{ opacity: value >= lim ? 0.3 : 1 }} onClick={() => onChange(addDays(value, 1))} aria-label="اليوم التالي">
+      <button className="ib flip" disabled={value >= lim} style={{ opacity: value >= lim ? 0.3 : 1 }} onClick={() => onChange(addDays(value, 1))} aria-label={t('next_day')}>
         <IChevL />
       </button>
     </div>
@@ -93,7 +94,7 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
   return (
     <div className="search">
       <ISearch />
-      <input type="search" value={value} placeholder={placeholder ?? 'بحث بالاسم أو الرقم'} onChange={(e) => onChange(e.target.value)} />
+      <input type="search" value={value} placeholder={placeholder ?? t('search_ph')} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -121,6 +122,10 @@ export const rateTone = (r: number) => (r >= 90 ? 'g' : r >= 70 ? 'y' : 'r');
 /** مطابقة البحث: تجاهل الهمزات والتشكيل */
 export function normAr(s: string) {
   return s
+    .toLocaleLowerCase("tr")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f\u0653-\u0655]/g, "")
+    .replace(/ı/g, "i")
     .replace(/[ً-ْـ]/g, '')
     .replace(/[أإآ]/g, 'ا')
     .replace(/ى/g, 'ي')

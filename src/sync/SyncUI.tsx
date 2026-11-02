@@ -3,6 +3,7 @@ import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 import { createSchool, formatCode, getSyncState, joinSchool, leaveSchool, subscribeSync, syncAvailable, push, type SyncState } from './sync';
 import { useUI } from '../components/ui';
+import { t, locale } from '../i18n';
 
 export function useSyncState(): SyncState {
   const [s, setS] = useState(getSyncState());
@@ -15,13 +16,13 @@ export function useSyncState(): SyncState {
   return s;
 }
 
-const ago = (t: number | null) => {
-  if (!t) return '—';
-  const m = Math.round((Date.now() - t) / 60000);
-  if (m < 1) return 'الآن';
-  if (m < 60) return `قبل ${m} دقيقة`;
+const ago = (ts: number | null) => {
+  if (!ts) return '—';
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return t('ago_now');
+  if (m < 60) return t('ago_min', { n: m });
   const h = Math.round(m / 60);
-  return h < 24 ? `قبل ${h} ساعة` : new Date(t).toLocaleDateString('ar-EG');
+  return h < 24 ? t('ago_hour', { n: h }) : new Date(ts).toLocaleDateString(locale());
 };
 
 /** مؤشر صغير في الشريط العلوي */
@@ -29,11 +30,11 @@ export function SyncDot() {
   const s = useSyncState();
   if (!s.enabled) return null;
   const ok = s.online && s.pending === 0 && !s.error;
-  const title = !s.online ? 'غير متصل — سيتم الرفع لاحقًا' : s.pending ? `بانتظار الرفع: ${s.pending}` : 'تمت المزامنة';
+  const title = !s.online ? t('offline_long') : s.pending ? t('pending', { n: s.pending }) : t('dot_synced');
   return (
     <span title={title} aria-label={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, background: 'rgba(255,255,255,.15)', borderRadius: 999, padding: '3px 8px' }}>
       <i style={{ width: 8, height: 8, borderRadius: 9, background: ok ? '#4ade80' : '#fbbf24', display: 'inline-block' }} />
-      {ok ? 'متزامن' : !s.online ? 'دون اتصال' : s.pending ? `${s.pending} بانتظار الرفع` : 'مزامنة'}
+      {ok ? t('dot_synced') : !s.online ? t('dot_offline') : s.pending ? t('dot_pending', { n: s.pending }) : t('dot_sync')}
     </span>
   );
 }
@@ -46,22 +47,22 @@ export function SyncCard({ isAdmin }: { isAdmin: boolean }) {
   if (!syncAvailable()) return null;
 
   const share = async () => {
-    const text = `رمز الانضمام لتطبيق متابعة حضور الصلاة:\n${formatCode(s.school!)}`;
-    if (Capacitor.isNativePlatform()) await Share.share({ text, dialogTitle: 'مشاركة رمز المدرسة' });
+    const text = t('share_text', { code: formatCode(s.school!) });
+    if (Capacitor.isNativePlatform()) await Share.share({ text, dialogTitle: t('share_title') });
     else {
       await navigator.clipboard?.writeText(formatCode(s.school!));
-      ui.toast('تم نسخ الرمز');
+      ui.toast(t('code_copied'));
     }
   };
 
   return (
     <div className="card">
-      <h3>المزامنة بين الأجهزة</h3>
+      <h3>{t('sync_title')}</h3>
       {!s.enabled ? (
         isAdmin ? (
           <>
             <p className="small muted" style={{ marginTop: 0 }}>
-              فعّل المزامنة ليستطيع المشرفون استخدام التطبيق على هواتفهم ورؤية نفس البيانات. سيظهر لك رمز تعطيه لكل مشرف.
+              {t('sync_off_hint')}
             </p>
             <button
               className="btn block"
@@ -70,56 +71,56 @@ export function SyncCard({ isAdmin }: { isAdmin: boolean }) {
                 setBusy(true);
                 try {
                   await createSchool();
-                  ui.toast('تم تفعيل المزامنة ورفع البيانات');
+                  ui.toast(t('sync_enabled'));
                 } catch (e) {
-                  ui.toast('تعذّر التفعيل: ' + (e as Error).message, true);
+                  ui.toast(t('sync_enable_failed', { e: (e as Error).message }), true);
                 } finally {
                   setBusy(false);
                 }
               }}
             >
-              {busy ? 'جارٍ رفع البيانات...' : 'تفعيل المزامنة وإنشاء رمز المدرسة'}
+              {busy ? t('uploading') : t('enable_sync')}
             </button>
           </>
         ) : (
-          <p className="small muted">المزامنة غير مفعّلة على هذا الجهاز.</p>
+          <p className="small muted">{t('sync_off_sup')}</p>
         )
       ) : (
         <>
           {isAdmin && (
             <>
               <p className="small muted" style={{ margin: '0 0 6px' }}>
-                رمز المدرسة (يُدخله المشرف عند فتح التطبيق أول مرة على هاتفه):
+                {t('code_hint')}
               </p>
               <div className="row">
                 <b dir="ltr" className="grow" style={{ fontSize: 22, letterSpacing: 2, background: 'var(--brand-soft)', color: 'var(--brand)', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
                   {formatCode(s.school!)}
                 </b>
                 <button className="btn sm" onClick={share}>
-                  مشاركة
+                  {t('share')}
                 </button>
               </div>
             </>
           )}
           <div className="small" style={{ marginTop: 10, lineHeight: 1.9 }}>
             <div>
-              الحالة: <b style={{ color: s.online ? 'var(--ok)' : 'var(--warn)' }}>{s.online ? 'متصل' : 'غير متصل (يُحفظ محليًا ويُرفع لاحقًا)'}</b>
+              {t('status')}: <b style={{ color: s.online ? 'var(--ok)' : 'var(--warn)' }}>{s.online ? t('online') : t('offline_long')}</b>
             </div>
-            <div>تغييرات بانتظار الرفع: {s.pending}</div>
-            <div>آخر مزامنة: {ago(s.lastSync)}</div>
-            {s.error && <div style={{ color: 'var(--bad)' }}>خطأ: {s.error}</div>}
+            <div>{t('pending', { n: s.pending })}</div>
+            <div>{t('last_sync', { v: ago(s.lastSync) })}</div>
+            {s.error && <div style={{ color: 'var(--bad)' }}>{t('error_x', { e: s.error })}</div>}
           </div>
           <div className="row" style={{ marginTop: 8 }}>
             <button className="btn sm ghost grow" onClick={() => void push()}>
-              مزامنة الآن
+              {t('sync_now')}
             </button>
             <button
               className="btn sm ghost grow"
               onClick={async () => {
-                if (await ui.confirm('إيقاف المزامنة على هذا الجهاز؟ تبقى البيانات الحالية على الهاتف لكن لن تصله تحديثات الآخرين.', { ok: 'إيقاف', danger: true })) await leaveSchool();
+                if (await ui.confirm(t('confirm_stop_sync'), { ok: t('stop'), danger: true })) await leaveSchool();
               }}
             >
-              إيقاف المزامنة
+              {t('stop_sync')}
             </button>
           </div>
         </>
@@ -135,9 +136,9 @@ export function JoinSchool({ onCancel }: { onCancel: () => void }) {
   const s = useSyncState();
   return (
     <div className="card">
-      <h3>الانضمام إلى مدرسة موجودة</h3>
+      <h3>{t('join_title')}</h3>
       <p className="small muted" style={{ marginTop: 0 }}>
-        اطلب رمز المدرسة من مسؤول التطبيق (يجده في: المزيد ← المزامنة بين الأجهزة). يلزم اتصال بالإنترنت لهذه الخطوة فقط.
+        {t('join_hint')}
       </p>
       <input dir="ltr" value={code} onChange={(e) => (setCode(e.target.value), setErr(''))} placeholder="XXXX-XXXX-XXXX" style={{ textAlign: 'center', fontSize: 20, letterSpacing: 2 }} />
       {err && <p className="small" style={{ color: 'var(--bad)' }}>{err}</p>}
@@ -153,11 +154,11 @@ export function JoinSchool({ onCancel }: { onCancel: () => void }) {
           }
         }}
       >
-        {s.loading ? 'جارٍ تنزيل البيانات...' : 'انضمام'}
+        {s.loading ? t('downloading') : t('join')}
       </button>
       <div className="sp" />
       <button className="btn block ghost" onClick={onCancel} disabled={s.loading}>
-        رجوع
+        {t('back')}
       </button>
     </div>
   );

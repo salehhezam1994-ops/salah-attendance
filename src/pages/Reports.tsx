@@ -10,6 +10,9 @@ import { addDays, fmtDate, monthName, monthRange, todayISO, weekStart, fromISO }
 import { DateBar, SearchBox, matchStudent, useUI } from '../components/ui';
 import { IChevL, IChevR, IPdf, IXls } from '../components/Icons';
 import { getSetting } from '../db/repo';
+import { t } from '../i18n';
+import { GroupTabs } from '../components/GroupTabs';
+import { PRAYER_GROUP, groupSlots } from '../lib/slots';
 
 export type Period = { kind: 'day' | 'week' | 'month' | 'range' | 'all'; from: string; to: string };
 
@@ -33,11 +36,11 @@ export function periodRange(p: Period): [string, string] {
 export function PeriodPicker({ value, onChange, allowAll, allowDay }: { value: Period; onChange: (p: Period) => void; allowAll?: boolean; allowDay?: boolean }) {
   const [from, to] = periodRange(value);
   const kinds: [Period['kind'], string][] = [
-    ...(allowDay ? ([['day', 'يومي']] as [Period['kind'], string][]) : []),
-    ['week', 'أسبوعي'],
-    ['month', 'شهري'],
-    ['range', 'فترة محددة'],
-    ...(allowAll ? ([['all', 'الكل']] as [Period['kind'], string][]) : []),
+    ...(allowDay ? ([['day', t('period_day')]] as [Period['kind'], string][]) : []),
+    ['week', t('period_week')],
+    ['month', t('period_month')],
+    ['range', t('period_range')],
+    ...(allowAll ? ([['all', t('period_all')]] as [Period['kind'], string][]) : []),
   ];
   const shift = (dir: number) => {
     if (value.kind === 'week') onChange({ ...value, from: addDays(from, 7 * dir) });
@@ -62,12 +65,12 @@ export function PeriodPicker({ value, onChange, allowAll, allowDay }: { value: P
       </div>
       {value.kind === 'day' && <DateBar value={value.from} onChange={(d) => onChange({ ...value, from: d })} />}
       {(value.kind === 'week' || value.kind === 'month') && (
-        <div className="datebar" style={{ boxShadow: 'none', background: '#f5f8f6' }}>
-          <button className="ib" onClick={() => shift(-1)}>
+        <div className="datebar" style={{ boxShadow: 'none', background: 'var(--soft, #f5f8f6)' }}>
+          <button className="ib flip" onClick={() => shift(-1)}>
             <IChevR />
           </button>
           <div className="d">{label}</div>
-          <button className="ib" onClick={() => shift(1)} disabled={to >= todayISO()} style={{ opacity: to >= todayISO() ? 0.3 : 1 }}>
+          <button className="ib flip" onClick={() => shift(1)} disabled={to >= todayISO()} style={{ opacity: to >= todayISO() ? 0.3 : 1 }}>
             <IChevL />
           </button>
         </div>
@@ -75,11 +78,11 @@ export function PeriodPicker({ value, onChange, allowAll, allowDay }: { value: P
       {value.kind === 'range' && (
         <div className="row">
           <div className="grow">
-            <label className="f" style={{ marginTop: 4 }}>من</label>
+            <label className="f" style={{ marginTop: 4 }}>{t('from')}</label>
             <input type="date" value={value.from} max={value.to} onChange={(e) => e.target.value && onChange({ ...value, from: e.target.value })} />
           </div>
           <div className="grow">
-            <label className="f" style={{ marginTop: 4 }}>إلى</label>
+            <label className="f" style={{ marginTop: 4 }}>{t('to')}</label>
             <input type="date" value={value.to} min={value.from} onChange={(e) => e.target.value && onChange({ ...value, to: e.target.value })} />
           </div>
         </div>
@@ -99,7 +102,7 @@ export function ExportButtons({ make }: { make: () => ReportDoc }) {
       else await exportExcel(doc);
     } catch (e) {
       const msg = (e as Error)?.message ?? '';
-      if (!/cancel|abort/i.test(msg)) ui.toast('تعذّر التصدير: ' + msg, true);
+      if (!/cancel|abort/i.test(msg)) ui.toast(t('export_failed', { e: msg }), true);
     } finally {
       setBusy('');
     }
@@ -107,10 +110,10 @@ export function ExportButtons({ make }: { make: () => ReportDoc }) {
   return (
     <div className="row" style={{ margin: '4px 0 12px' }}>
       <button className="btn grow" style={{ background: '#b42318' }} disabled={!!busy} onClick={() => run('pdf')}>
-        <IPdf /> {busy === 'pdf' ? 'جارٍ التجهيز...' : 'تصدير PDF'}
+        <IPdf /> {busy === 'pdf' ? t('preparing') : t('export_pdf')}
       </button>
       <button className="btn grow" style={{ background: '#1d6f42' }} disabled={!!busy} onClick={() => run('xls')}>
-        <IXls /> {busy === 'xls' ? 'جارٍ التجهيز...' : 'تصدير Excel'}
+        <IXls /> {busy === 'xls' ? t('preparing') : t('export_excel')}
       </button>
     </div>
   );
@@ -183,6 +186,8 @@ export default function ReportsPage() {
   const [classId, setClassId] = useState<string>('');
   const [studentId, setStudentId] = useState<string>('');
   const [q, setQ] = useState('');
+  const [group, setGroup] = useState(PRAYER_GROUP);
+  const slots = groupSlots(group);
   const classes = useLiveQuery(async () => allowedClasses(await db.classes.orderBy('order').toArray()), [user.id]);
   const students = useLiveQuery(() => db.students.toArray(), []);
   const org = useLiveQuery(() => getSetting('org', ''), []);
@@ -194,17 +199,17 @@ export default function ReportsPage() {
     const allowedIds = classes.map((c) => c.id);
     if (scope === 'student') {
       if (!studentId) return null;
-      const r = await buildReport({ from, to, studentId });
+      const r = await buildReport({ from, to, studentId, slots });
       return studentDoc(r, org || undefined);
     }
     const ids = scope === 'class' ? (classId ? [classId] : null) : restricted ? allowedIds : null;
     if (scope === 'class' && !classId) return null;
-    const r = await buildReport({ from, to, classIds: ids });
+    const r = await buildReport({ from, to, classIds: ids, slots });
     if (period.kind === 'day') return dailyDoc(r, from, org || undefined);
-    const t = period.kind === 'week' ? 'التقرير الأسبوعي' : period.kind === 'month' ? 'التقرير الشهري' : 'تقرير الحضور';
+    const title = period.kind === 'week' ? t('r_weekly') : period.kind === 'month' ? t('r_monthly') : t('r_period');
     const cn = scope === 'class' ? ' — ' + (classes.find((c) => c.id === classId)?.name ?? '') : '';
-    return periodDoc(r, t + cn, org || undefined);
-  }, [from, to, scope, classId, studentId, classes, period.kind, org]);
+    return periodDoc(r, title + cn, org || undefined);
+  }, [from, to, scope, classId, studentId, classes, period.kind, org, group]);
 
   const visibleStudents = useMemo(() => {
     if (!students || !classes) return [];
@@ -219,18 +224,18 @@ export default function ReportsPage() {
   return (
     <>
       <header className="topbar">
-        <h1>التقارير</h1>
+        <h1>{t('reports_title')}</h1>
       </header>
       <main className="content">
         <div className="tabs">
           <button className={scope === 'all' ? 'on' : ''} onClick={() => setScope('all')}>
-            {restricted ? 'صفوفي' : 'جميع الصفوف'}
+            {restricted ? t('scope_my') : t('scope_all')}
           </button>
           <button className={scope === 'class' ? 'on' : ''} onClick={() => (setScope('class'), !classId && setClassId(classes[0]?.id ?? ''))}>
-            صف
+            {t('scope_class')}
           </button>
           <button className={scope === 'student' ? 'on' : ''} onClick={() => setScope('student')}>
-            طالب
+            {t('scope_student')}
           </button>
         </div>
         {scope === 'class' && (
@@ -249,16 +254,16 @@ export default function ReportsPage() {
                 <span className="avatar">{chosen.serial}</span>
                 <b className="grow">{chosen.name}</b>
                 <button className="btn sm ghost" onClick={() => setStudentId('')}>
-                  تغيير
+                  {t('change')}
                 </button>
               </div>
             ) : (
               <>
-                <SearchBox value={q} onChange={setQ} placeholder="ابحث عن الطالب بالاسم أو الرقم" />
+                <SearchBox value={q} onChange={setQ} placeholder={t('search_student')} />
                 {visibleStudents.map((s) => (
                   <button key={s.id} className="list-item" style={{ width: '100%' }} onClick={() => setStudentId(s.id)}>
                     <span className="avatar">{s.serial}</span>
-                    <span className="grow" style={{ textAlign: 'right' }}>
+                    <span className="grow" style={{ textAlign: 'start' }}>
                       {s.name}
                     </span>
                   </button>
@@ -268,6 +273,7 @@ export default function ReportsPage() {
           </div>
         )}
 
+        <GroupTabs value={group} onChange={setGroup} />
         <PeriodPicker value={period} onChange={setPeriod} allowDay={scope !== 'student'} allowAll={scope === 'student'} />
 
         {doc ? (
@@ -276,7 +282,7 @@ export default function ReportsPage() {
             <DocView doc={doc} />
           </>
         ) : (
-          <p className="center muted">{scope === 'student' ? 'اختر طالبًا لعرض تقريره' : 'اختر الصف'}</p>
+          <p className="center muted">{scope === 'student' ? t('choose_student_hint') : t('choose_class_hint')}</p>
         )}
       </main>
     </>

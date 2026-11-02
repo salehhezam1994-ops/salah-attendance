@@ -21,12 +21,13 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body, #root { height: 100%; }
+html[lang='ar'] body { font-family: 'Tajawal', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+[dir='ltr'] .flip svg { transform: scaleX(-1); }
 body {
   margin: 0;
-  font-family: 'Tajawal', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--text);
-  direction: rtl;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
@@ -130,7 +131,7 @@ label.f { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 6
 
 .search { position: relative; }
 .search input { padding-inline-start: 42px; }
-.search svg { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); width: 20px; color: var(--muted); }
+.search svg { position: absolute; top: 50%; inset-inline-start: 12px; transform: translateY(-50%); width: 20px; color: var(--muted); }
 
 /* ---------- قائمة الحضور ---------- */
 .stats3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -200,7 +201,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tbl th { background: var(--brand-soft); color: var(--brand); padding: 8px 6px; font-weight: 700; white-space: nowrap; }
 .tbl td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
 .tbl td.r { color: var(--bad); font-weight: 700; } .tbl td.g { color: var(--ok); font-weight: 700; } .tbl td.y { color: var(--warn); font-weight: 700; }
-.tbl td:nth-child(2) { text-align: right; }
+.tbl td:nth-child(2) { text-align: start; }
 
 /* ---------- النوافذ ---------- */
 .overlay { position: fixed; inset: 0; background: rgba(10, 20, 15, 0.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; animation: fade .15s; }
@@ -222,7 +223,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 }
 .toast.err { background: var(--bad); }
 
-.menu-item { display: flex; align-items: center; gap: 12px; padding: 14px 4px; border-bottom: 1px solid var(--line); width: 100%; text-align: right; font-weight: 500; }
+.menu-item { display: flex; align-items: center; gap: 12px; padding: 14px 4px; border-bottom: 1px solid var(--line); width: 100%; text-align: start; font-weight: 500; }
 .menu-item:last-child { border-bottom: 0; }
 .menu-item svg { width: 22px; height: 22px; color: var(--brand); }
 

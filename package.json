@@ -13,6 +13,7 @@
     "@capacitor/core": "^7.0.1",
     "@capacitor/filesystem": "^7.0.0",
     "@capacitor/share": "^7.0.0",
+    "@fontsource/inter": "^5.1.0",
     "@fontsource/tajawal": "^5.1.0",
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^1.1.7",

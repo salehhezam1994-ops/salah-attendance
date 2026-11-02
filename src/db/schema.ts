@@ -1,15 +1,24 @@
 import Dexie, { type Table } from 'dexie';
+import { t } from '../i18n';
 
 /** الصلوات الخمس بالترتيب */
 export const PRAYERS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
 export type Prayer = (typeof PRAYERS)[number];
-export const PRAYER_NAMES: Record<Prayer, string> = {
-  fajr: 'الفجر',
-  dhuhr: 'الظهر',
-  asr: 'العصر',
-  maghrib: 'المغرب',
-  isha: 'العشاء',
-};
+
+/** معرّف «الوقت»: إما صلاة (fajr...) أو نشاط بصيغة a:{activityId} */
+export type Slot = string;
+export const activitySlot = (id: string) => `a:${id}`;
+export const isPrayerSlot = (s: string): s is Prayer => (PRAYERS as readonly string[]).includes(s);
+
+/** نشاط غير الصلاة (مثل التواجد في الكلية) — يُسجَّل مرة يوميًا */
+export interface Activity {
+  id: string;
+  name: string;
+  order: number;
+  active: 1 | 0;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export type Status = 'P' | 'A'; // P = حاضر ، A = غائب
 
@@ -36,7 +45,7 @@ export interface Student {
 export interface Attendance {
   id: string; // `${date}|${prayer}|${studentId}` — يضمن سجلًا واحدًا فقط
   date: string; // YYYY-MM-DD
-  prayer: Prayer;
+  prayer: Slot; // صلاة أو نشاط
   studentId: string;
   classId: string; // صف الطالب وقت التسجيل (حتى لا تتغير التقارير القديمة عند نقل الطالب)
   status: Status;
@@ -78,7 +87,7 @@ export interface OutboxItem {
   id: string;
   at: number;
 }
-export const SYNC_TABLES = ['classes', 'students', 'attendance', 'users', 'settings'] as const;
+export const SYNC_TABLES = ['classes', 'students', 'attendance', 'users', 'settings', 'activities'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 /** إعدادات خاصة بالجهاز لا تُزامَن */
 export const LOCAL_SETTINGS = new Set(['syncSchool', 'syncCursor', 'lastBackup', 'syncLast']);
@@ -90,6 +99,7 @@ export class AppDB extends Dexie {
   users!: Table<User, string>;
   settings!: Table<Setting, string>;
   outbox!: Table<OutboxItem, string>;
+  activities!: Table<Activity, string>;
 
   constructor() {
     super('salah_attendance');
@@ -101,7 +111,18 @@ export class AppDB extends Dexie {
       settings: 'key',
     });
     this.version(2).stores({ outbox: 'key, at' });
+    this.version(3)
+      .stores({ activities: 'id, order' })
+      .upgrade((tx) => tx.table('activities').put(defaultActivity()));
+    this.on('populate', (tx) => {
+      tx.table('activities').put(defaultActivity());
+    });
   }
+}
+
+/** نشاط افتراضي بمعرّف ثابت حتى لا يتكرر عند المزامنة بين الأجهزة */
+function defaultActivity(): Activity {
+  return { id: 'college', name: t('default_activity'), order: 1, active: 1, createdAt: Date.now(), updatedAt: 0 };
 }
 
 export const db = new AppDB();
@@ -119,4 +140,4 @@ export function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
-export const attId = (date: string, prayer: Prayer, studentId: string) => `${date}|${prayer}|${studentId}`;
+export const attId = (date: string, prayer: Slot, studentId: string) => `${date}|${prayer}|${studentId}`;

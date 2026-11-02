@@ -1,4 +1,5 @@
-import { db, uid, attId, FULL_PERMS, LOCAL_SETTINGS, type Attendance, type ClassRoom, type Prayer, type Student, type User, type Permissions } from './schema';
+import { db, uid, attId, FULL_PERMS, LOCAL_SETTINGS, activitySlot, type Activity, type Attendance, type ClassRoom, type Slot, type Student, type User, type Permissions } from './schema';
+import { t } from '../i18n';
 
 // ---------- المستخدمون ----------
 export async function hashPin(pin: string): Promise<string> {
@@ -48,9 +49,38 @@ export async function moveClassOrder(id: string, dir: -1 | 1) {
 export async function deleteClass(id: string, moveStudentsTo?: string) {
   await db.transaction('rw', db.classes, db.students, async () => {
     const studs = await db.students.where('classId').equals(id).toArray();
-    if (studs.length && !moveStudentsTo) throw new Error('الصف يحتوي على طلاب');
+    if (studs.length && !moveStudentsTo) throw new Error(t('err_class_has_students'));
     if (moveStudentsTo) for (const s of studs) await db.students.update(s.id, { classId: moveStudentsTo, updatedAt: Date.now() });
     await db.classes.delete(id);
+  });
+}
+
+// ---------- الأنشطة ----------
+export async function addActivity(name: string) {
+  const max = await db.activities.orderBy('order').last();
+  const a: Activity = { id: uid(), name: name.trim(), order: (max?.order ?? 0) + 1, active: 1, createdAt: Date.now(), updatedAt: Date.now() };
+  await db.activities.add(a);
+  return a;
+}
+export async function renameActivity(id: string, name: string) {
+  await db.activities.update(id, { name: name.trim() });
+}
+export async function moveActivityOrder(id: string, dir: -1 | 1) {
+  const list = await db.activities.orderBy('order').toArray();
+  const i = list.findIndex((c) => c.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  await db.transaction('rw', db.activities, async () => {
+    await db.activities.update(list[i].id, { order: list[j].order });
+    await db.activities.update(list[j].id, { order: list[i].order });
+  });
+}
+/** حذف نشاط مع كل سجلات حضوره */
+export async function deleteActivity(id: string) {
+  const slot = activitySlot(id);
+  await db.transaction('rw', db.activities, db.attendance, async () => {
+    await db.attendance.filter((r) => r.prayer === slot).delete();
+    await db.activities.delete(id);
   });
 }
 
@@ -150,7 +180,7 @@ export async function importStudents(rows: ImportRow[], defaultClassId: string |
 }
 
 // ---------- الحضور ----------
-export async function setStatus(date: string, prayer: Prayer, student: Student, status: 'P' | 'A' | null, by?: string) {
+export async function setStatus(date: string, prayer: Slot, student: Student, status: 'P' | 'A' | null, by?: string) {
   const id = attId(date, prayer, student.id);
   if (status === null) {
     await db.attendance.delete(id);
@@ -172,7 +202,7 @@ export async function setStatus(date: string, prayer: Prayer, student: Student, 
   await db.attendance.put(rec);
 }
 
-export async function setNote(date: string, prayer: Prayer, student: Student, note: string, excused: boolean, by?: string) {
+export async function setNote(date: string, prayer: Slot, student: Student, note: string, excused: boolean, by?: string) {
   const id = attId(date, prayer, student.id);
   const prev = await db.attendance.get(id);
   await db.attendance.put({
@@ -190,7 +220,7 @@ export async function setNote(date: string, prayer: Prayer, student: Student, no
 }
 
 /** تحديد الجميع حاضرًا (لا يغيّر من سُجّل غيابه مسبقًا إلا إذا overwrite) */
-export async function markAll(date: string, prayer: Prayer, students: Student[], status: 'P' | 'A', overwrite: boolean, by?: string) {
+export async function markAll(date: string, prayer: Slot, students: Student[], status: 'P' | 'A', overwrite: boolean, by?: string) {
   await db.transaction('rw', db.attendance, async () => {
     const ids = students.map((s) => attId(date, prayer, s.id));
     const prev = await db.attendance.bulkGet(ids);
@@ -205,7 +235,7 @@ export async function markAll(date: string, prayer: Prayer, students: Student[],
   });
 }
 
-export async function clearSession(date: string, prayer: Prayer, students: Student[]) {
+export async function clearSession(date: string, prayer: Slot, students: Student[]) {
   await db.attendance.bulkDelete(students.map((s) => attId(date, prayer, s.id)));
 }
 
@@ -220,19 +250,20 @@ export async function setSetting(key: string, value: unknown) {
 
 // ---------- النسخ الاحتياطي ----------
 export async function exportBackup() {
-  const [classes, students, attendance, users, settings] = await Promise.all([
+  const [classes, students, attendance, users, settings, activities] = await Promise.all([
     db.classes.toArray(),
     db.students.toArray(),
     db.attendance.toArray(),
     db.users.toArray(),
     db.settings.toArray(),
+    db.activities.toArray(),
   ]);
-  return JSON.stringify({ app: 'salah-attendance', version: 1, exportedAt: new Date().toISOString(), classes, students, attendance, users, settings: settings.filter((x) => !LOCAL_SETTINGS.has(x.key)) });
+  return JSON.stringify({ app: 'salah-attendance', version: 1, exportedAt: new Date().toISOString(), classes, students, attendance, users, activities, settings: settings.filter((x) => !LOCAL_SETTINGS.has(x.key)) });
 }
 export async function importBackup(json: string) {
   const data = JSON.parse(json);
-  if (data.app !== 'salah-attendance') throw new Error('الملف ليس نسخة احتياطية لهذا التطبيق');
-  await db.transaction('rw', [db.classes, db.students, db.attendance, db.users, db.settings], async () => {
+  if (data.app !== 'salah-attendance') throw new Error(t('not_backup'));
+  await db.transaction('rw', [db.classes, db.students, db.attendance, db.users, db.settings, db.activities], async () => {
     const keep = (await db.settings.toArray()).filter((x) => LOCAL_SETTINGS.has(x.key));
     await Promise.all([db.classes.clear(), db.students.clear(), db.attendance.clear(), db.users.clear(), db.settings.clear()]);
     await db.settings.bulkAdd(keep);
@@ -240,6 +271,10 @@ export async function importBackup(json: string) {
     await db.students.bulkAdd(data.students ?? []);
     await db.attendance.bulkAdd(data.attendance ?? []);
     await db.users.bulkAdd(data.users ?? []);
+    if (data.activities) {
+      await db.activities.clear();
+      await db.activities.bulkAdd(data.activities);
+    }
     await db.settings.bulkAdd((data.settings ?? []).filter((x: { key: string }) => !LOCAL_SETTINGS.has(x.key)));
   });
 }
