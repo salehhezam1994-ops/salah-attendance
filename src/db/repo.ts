@@ -1,4 +1,4 @@
-import { db, uid, attId, FULL_PERMS, type Attendance, type ClassRoom, type Prayer, type Student, type User, type Permissions } from './schema';
+import { db, uid, attId, FULL_PERMS, LOCAL_SETTINGS, type Attendance, type ClassRoom, type Prayer, type Student, type User, type Permissions } from './schema';
 
 // ---------- المستخدمون ----------
 export async function hashPin(pin: string): Promise<string> {
@@ -227,17 +227,19 @@ export async function exportBackup() {
     db.users.toArray(),
     db.settings.toArray(),
   ]);
-  return JSON.stringify({ app: 'salah-attendance', version: 1, exportedAt: new Date().toISOString(), classes, students, attendance, users, settings });
+  return JSON.stringify({ app: 'salah-attendance', version: 1, exportedAt: new Date().toISOString(), classes, students, attendance, users, settings: settings.filter((x) => !LOCAL_SETTINGS.has(x.key)) });
 }
 export async function importBackup(json: string) {
   const data = JSON.parse(json);
   if (data.app !== 'salah-attendance') throw new Error('الملف ليس نسخة احتياطية لهذا التطبيق');
   await db.transaction('rw', [db.classes, db.students, db.attendance, db.users, db.settings], async () => {
+    const keep = (await db.settings.toArray()).filter((x) => LOCAL_SETTINGS.has(x.key));
     await Promise.all([db.classes.clear(), db.students.clear(), db.attendance.clear(), db.users.clear(), db.settings.clear()]);
+    await db.settings.bulkAdd(keep);
     await db.classes.bulkAdd(data.classes ?? []);
     await db.students.bulkAdd(data.students ?? []);
     await db.attendance.bulkAdd(data.attendance ?? []);
     await db.users.bulkAdd(data.users ?? []);
-    await db.settings.bulkAdd(data.settings ?? []);
+    await db.settings.bulkAdd((data.settings ?? []).filter((x: { key: string }) => !LOCAL_SETTINGS.has(x.key)));
   });
 }

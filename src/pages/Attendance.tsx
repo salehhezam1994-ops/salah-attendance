@@ -8,6 +8,7 @@ import { useAuth } from '../auth';
 import { DateBar, Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
 import { IAllCheck, ICheck, INote, IReset, ISearch, IUsers, IX } from '../components/Icons';
 import { todayISO } from '../lib/dates';
+import { SyncDot } from '../sync/SyncUI';
 
 const REASONS = ['مريض', 'مسافر', 'استئذان', 'ظرف عائلي', 'صلّى في مسجد آخر'];
 
@@ -90,6 +91,7 @@ export default function AttendancePage() {
     <>
       <header className="topbar">
         <h1>تسجيل الحضور</h1>
+        <SyncDot />
         <button className="ib" onClick={() => (setShowSearch((v) => !v), setQ(''))} aria-label="بحث">
           <ISearch />
         </button>

@@ -7,6 +7,8 @@ import { Sheet, useUI } from '../components/ui';
 import { IDB, IDownload, IEdit, ILogout, IPlus, IShield, IUpload } from '../components/Icons';
 import { pickFile, saveFile, textToBase64 } from '../lib/files';
 import { todayISO } from '../lib/dates';
+import { SyncCard } from '../sync/SyncUI';
+import { requeueAll } from '../sync/sync';
 
 export default function MorePage() {
   const { user, isAdmin, logout } = useAuth();
@@ -28,6 +30,7 @@ export default function MorePage() {
     if (!(await ui.confirm('ستُستبدل جميع البيانات الحالية بمحتوى النسخة الاحتياطية. هل تريد المتابعة؟', { ok: 'استرجاع', danger: true }))) return;
     try {
       await importBackup(await f.text());
+      await requeueAll();
       ui.toast('تم استرجاع البيانات');
       setTimeout(() => location.reload(), 800);
     } catch (e) {
@@ -101,7 +104,7 @@ export default function MorePage() {
             <div className="card">
               <h3>البيانات والنسخ الاحتياطي</h3>
               <p className="small muted" style={{ marginTop: 0 }}>
-                جميع البيانات محفوظة على هذا الجهاز فقط ({counts?.c ?? 0} صف، {counts?.s ?? 0} طالب، {counts?.a ?? 0} سجل حضور). احفظ نسخة احتياطية دوريًا لنقلها إلى جهاز آخر أو حمايتها من الضياع.
+                البيانات على هذا الجهاز: ({counts?.c ?? 0} صف، {counts?.s ?? 0} طالب، {counts?.a ?? 0} سجل حضور). احفظ نسخة احتياطية دوريًا لنقلها إلى جهاز آخر أو حمايتها من الضياع.
               </p>
               <button className="menu-item" onClick={backup}>
                 <IDownload /> حفظ نسخة احتياطية
@@ -112,6 +115,8 @@ export default function MorePage() {
             </div>
           </>
         )}
+
+        <SyncCard isAdmin={isAdmin} />
 
         {!isAdmin && (
           <div className="card">

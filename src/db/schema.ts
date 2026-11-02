@@ -62,12 +62,26 @@ export interface User {
   perms: Permissions;
   active: 1 | 0;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface Setting {
   key: string;
   value: unknown;
+  updatedAt?: number;
 }
+
+/** قائمة التغييرات المحلية التي لم تُرفع بعد إلى السحابة */
+export interface OutboxItem {
+  key: string; // `${table}|${id}`
+  table: SyncTable;
+  id: string;
+  at: number;
+}
+export const SYNC_TABLES = ['classes', 'students', 'attendance', 'users', 'settings'] as const;
+export type SyncTable = (typeof SYNC_TABLES)[number];
+/** إعدادات خاصة بالجهاز لا تُزامَن */
+export const LOCAL_SETTINGS = new Set(['syncSchool', 'syncCursor', 'lastBackup', 'syncLast']);
 
 export class AppDB extends Dexie {
   classes!: Table<ClassRoom, string>;
@@ -75,6 +89,7 @@ export class AppDB extends Dexie {
   attendance!: Table<Attendance, string>;
   users!: Table<User, string>;
   settings!: Table<Setting, string>;
+  outbox!: Table<OutboxItem, string>;
 
   constructor() {
     super('salah_attendance');
@@ -85,6 +100,7 @@ export class AppDB extends Dexie {
       users: 'id, role',
       settings: 'key',
     });
+    this.version(2).stores({ outbox: 'key, at' });
   }
 }
 

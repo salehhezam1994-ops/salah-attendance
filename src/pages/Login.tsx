@@ -3,6 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/schema';
 import { createUser, setSetting, verifyPin } from '../db/repo';
 import { IMosque } from '../components/Icons';
+import { JoinSchool } from '../sync/SyncUI';
+import { syncAvailable } from '../sync/sync';
 
 function PinPad({ value, onChange, len = 4 }: { value: string; onChange: (v: string) => void; len?: number }) {
   return (
@@ -45,6 +47,7 @@ export function Setup({ onDone }: { onDone: (id: string) => void }) {
   const [pin2, setPin2] = useState('');
   const [step, setStep] = useState(0);
   const [err, setErr] = useState('');
+  const [joining, setJoining] = useState(false);
 
   useEffect(() => {
     if (step === 1 && pin.length === 4) setStep(2);
@@ -69,6 +72,9 @@ export function Setup({ onDone }: { onDone: (id: string) => void }) {
   return (
     <div className="auth">
       <Logo sub="الإعداد الأول للتطبيق" />
+      {joining ? (
+        <JoinSchool onCancel={() => setJoining(false)} />
+      ) : (
       <div className="card">
         {step === 0 && (
           <>
@@ -81,6 +87,16 @@ export function Setup({ onDone }: { onDone: (id: string) => void }) {
             <button className="btn block" disabled={!name.trim()} onClick={() => setStep(1)}>
               التالي: رمز الدخول
             </button>
+            {syncAvailable() && (
+              <>
+                <div className="center small muted" style={{ margin: '14px 0 8px' }}>
+                  — أو —
+                </div>
+                <button className="btn block light" onClick={() => setJoining(true)}>
+                  أنا مشرف: الانضمام إلى مدرسة برمز
+                </button>
+              </>
+            )}
           </>
         )}
         {step > 0 && (
@@ -91,6 +107,7 @@ export function Setup({ onDone }: { onDone: (id: string) => void }) {
           </>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -101,9 +118,12 @@ export function Login({ onLogin }: { onLogin: (id: string) => void }) {
   const [pin, setPin] = useState('');
   const [err, setErr] = useState('');
 
+  const [auto, setAuto] = useState(false);
   useEffect(() => {
-    if (users && users.length === 1 && !sel) setSel(users[0].id);
-  }, [users, sel]);
+    // اختيار تلقائي عند وجود مستخدم واحد فقط (ويُلغى إذا وصل مستخدمون آخرون من المزامنة)
+    if (users && users.length === 1 && !sel) (setSel(users[0].id), setAuto(true));
+    else if (users && users.length > 1 && auto) (setSel(null), setAuto(false));
+  }, [users, sel, auto]);
 
   useEffect(() => {
     if (sel && pin.length === 4) {
@@ -142,7 +162,7 @@ export function Login({ onLogin }: { onLogin: (id: string) => void }) {
               <span className="avatar">{selected.name.trim()[0]}</span>
               <b className="grow">{selected.name}</b>
               {users.length > 1 && (
-                <button className="btn sm ghost" onClick={() => (setSel(null), setPin(''), setErr(''))}>
+                <button className="btn sm ghost" onClick={() => (setSel(null), setAuto(false), setPin(''), setErr(''))}>
                   تغيير
                 </button>
               )}
