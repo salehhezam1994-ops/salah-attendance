@@ -6,11 +6,10 @@ import { markAll, clearSession, setNote, setStatus } from '../db/repo';
 import { useSel } from '../App';
 import { useAuth } from '../auth';
 import { DateBar, Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
-import { IAllCheck, ICheck, INfc, INote, IQr, IReset, ISearch, IUsers, IX } from '../components/Icons';
+import { IAllCheck, ICard, ICheck, INote, IQr, IReset, ISearch, IUsers, IX } from '../components/Icons';
 import { QrScanner, type ScanResult } from '../components/QrScanner';
 import { parseQr } from '../lib/qrCards';
-import { NfcPanel } from '../components/NfcPanel';
-import { useNfcStatus } from '../lib/nfc';
+import { CardPanel } from '../components/CardPanel';
 import { guessPrayer, todayISO } from '../lib/dates';
 import { SyncDot } from '../sync/SyncUI';
 import { t, type Key } from '../i18n';
@@ -26,8 +25,7 @@ export default function AttendancePage() {
   const [showSearch, setShowSearch] = useState(false);
   const [noteFor, setNoteFor] = useState<Student | null>(null);
   const acts = useActivities();
-  const [scanning, setScanning] = useState<'' | 'qr' | 'nfc'>('');
-  const nfc = useNfcStatus();
+  const [scanning, setScanning] = useState<'' | 'qr' | 'card'>('');
   const [summary, setSummary] = useState(false);
   const [scanN, setScanN] = useState(0);
   const scanned = useRef(new Set<string>());
@@ -106,9 +104,9 @@ export default function AttendancePage() {
     if (!s) return { kind: 'bad', title: t('scan_bad'), sub: t('scan_bad_sub') };
     return markScanned(s);
   };
-  const onNfc = async (uid: string): Promise<ScanResult> => {
-    const s = await db.students.where('nfc').equals(uid).first();
-    if (!s) return { kind: 'bad', title: t('nfc_unknown'), sub: t('nfc_unknown_sub') };
+  const onCard = async (card: string): Promise<ScanResult> => {
+    const s = await db.students.where('card').equals(card).first();
+    if (!s) return { kind: 'bad', title: t('card_unknown', { card }), sub: t('card_unknown_sub') };
     return markScanned(s);
   };
   const markScanned = async (s: Student): Promise<ScanResult> => {
@@ -124,7 +122,7 @@ export default function AttendancePage() {
     setScanN(scanned.current.size);
     return { kind: 'ok', title: s.name, sub };
   };
-  const startScan = (mode: 'qr' | 'nfc') => {
+  const startScan = (mode: 'qr' | 'card') => {
     if (readOnly) return ui.toast(t('no_perm_past'), true);
     scanned.current = new Set();
     setScanN(0);
@@ -144,11 +142,9 @@ export default function AttendancePage() {
         <SyncDot />
         {classes.length > 0 && !readOnly && (
           <>
-            {nfc?.supported && (
-              <button className="ib" onClick={() => startScan('nfc')} aria-label={t('nfc_scan')}>
-                <INfc />
-              </button>
-            )}
+            <button className="ib" onClick={() => startScan('card')} aria-label={t('card_scan')}>
+              <ICard />
+            </button>
             <button className="ib" onClick={() => startScan('qr')} aria-label={t('qr_scan')}>
               <IQr />
             </button>
@@ -279,7 +275,7 @@ export default function AttendancePage() {
         return scanning === 'qr' ? (
           <QrScanner title={t('scan_title', { slot: slotName(slot) })} onCode={onScan} onClose={finish} footer={footer} />
         ) : (
-          <NfcPanel title={t('nfc_title', { slot: slotName(slot) })} onTag={onNfc} onClose={finish} footer={footer} />
+          <CardPanel title={t('card_title', { slot: slotName(slot) })} onCard={onCard} onClose={finish} footer={footer} />
         );
       })()}
       {summary && (

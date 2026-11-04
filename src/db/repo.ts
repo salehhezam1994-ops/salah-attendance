@@ -1,3 +1,4 @@
+import { normCard } from '../lib/card';
 import { db, uid, attId, FULL_PERMS, LOCAL_SETTINGS, activitySlot, type Activity, type Attendance, type ClassRoom, type Slot, type Student, type User, type Permissions } from './schema';
 import { t } from '../i18n';
 
@@ -92,7 +93,7 @@ export async function nextSerial(): Promise<number> {
 export async function saveStudent(s: Partial<Student> & { name: string; classId: string }) {
   const now = Date.now();
   if (s.id) {
-    await db.students.update(s.id, { name: s.name.trim(), classId: s.classId, serial: s.serial, phone: s.phone?.trim() || undefined, updatedAt: now });
+    await db.students.update(s.id, { name: s.name.trim(), classId: s.classId, serial: s.serial, phone: s.phone?.trim() || undefined, card: s.card || undefined, updatedAt: now });
     return s.id;
   }
   const st: Student = {
@@ -101,6 +102,7 @@ export async function saveStudent(s: Partial<Student> & { name: string; classId:
     classId: s.classId,
     serial: s.serial ?? (await nextSerial()),
     phone: s.phone?.trim() || undefined,
+    card: s.card || undefined,
     active: 1,
     createdAt: now,
     updatedAt: now,
@@ -127,11 +129,14 @@ export interface ImportRow {
   serial?: number;
   phone?: string;
   className?: string;
+  card?: string;
 }
 /** استيراد جماعي: ينشئ الصفوف غير الموجودة تلقائيًا، ويتجاهل الأسماء المكررة في نفس الصف */
-export async function importStudents(rows: ImportRow[], defaultClassId: string | null) {
+/** linkOnly: ملف أرقام بطاقات بلا عمود صف ← نربط البطاقات للطلاب الموجودين فقط ولا نضيف أحدًا */
+export async function importStudents(rows: ImportRow[], defaultClassId: string | null, linkOnly = false) {
   let added = 0,
     skipped = 0,
+    linked = 0,
     createdClasses = 0;
   await db.transaction('rw', db.classes, db.students, async () => {
     const classes = await db.classes.toArray();
@@ -142,9 +147,30 @@ export async function importStudents(rows: ImportRow[], defaultClassId: string |
     const usedSerials = new Set(existing.map((s) => s.serial));
     let serial = Math.max(0, ...existing.map((s) => s.serial)) + 1;
     let order = Math.max(0, ...classes.map((c) => c.order));
+    const nk = (n: string) => n.replace(/\s+/g, ' ').trim().toLocaleLowerCase('tr');
+    const byStudentName = new Map<string, Student[]>();
+    for (const s of existing) byStudentName.set(nk(s.name), [...(byStudentName.get(nk(s.name)) ?? []), s]);
+    const cardOwner = new Map(existing.filter((s) => s.card).map((s) => [s.card!, s.id]));
     for (const r of rows) {
       const name = r.name.replace(/\s+/g, ' ').trim();
       if (!name) continue;
+      const card = r.card ? normCard(r.card) : '';
+      // ملف أرقام البطاقات: إن كان الطالب موجودًا (اسم فريد) نربط بطاقته فقط
+      const same = byStudentName.get(nk(name));
+      if (card && same?.length === 1 && (linkOnly || !r.className)) {
+        const st = same[0];
+        const owner = cardOwner.get(card);
+        if (st.card !== card && (!owner || owner === st.id)) {
+          await db.students.update(st.id, { card, updatedAt: Date.now() });
+          cardOwner.set(card, st.id);
+          linked++;
+        }
+        continue;
+      }
+      if (linkOnly) {
+        skipped++;
+        continue;
+      }
       let classId = defaultClassId;
       if (r.className?.trim()) {
         const cn = r.className.trim();
@@ -162,7 +188,12 @@ export async function importStudents(rows: ImportRow[], defaultClassId: string |
         continue;
       }
       if (seen.has(key(name, classId))) {
-        skipped++;
+        const st = card ? existing.find((x) => key(x.name, x.classId) === key(name, classId!)) : undefined;
+        if (st && st.card !== card && !cardOwner.has(card)) {
+          await db.students.update(st.id, { card, updatedAt: Date.now() });
+          cardOwner.set(card, st.id);
+          linked++;
+        } else skipped++;
         continue;
       }
       seen.add(key(name, classId));
@@ -172,11 +203,14 @@ export async function importStudents(rows: ImportRow[], defaultClassId: string |
         s = serial++;
       }
       usedSerials.add(s);
-      await db.students.add({ id: uid(), name, classId, serial: s, phone: r.phone?.trim() || undefined, active: 1, createdAt: Date.now(), updatedAt: Date.now() });
+      const useCard = card && !cardOwner.has(card) ? card : undefined;
+      const nid = uid();
+      if (useCard) (cardOwner.set(useCard, nid), linked++);
+      await db.students.add({ id: nid, name, classId, serial: s, phone: r.phone?.trim() || undefined, card: useCard, active: 1, createdAt: Date.now(), updatedAt: Date.now() });
       added++;
     }
   });
-  return { added, skipped, createdClasses };
+  return { added, skipped, createdClasses, linked };
 }
 
 // ---------- الحضور ----------

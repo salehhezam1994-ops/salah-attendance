@@ -5,8 +5,10 @@ import { db, type Activity, type ClassRoom, type Student } from '../db/schema';
 import { addActivity, deleteActivity, moveActivityOrder, renameActivity, addClass, deleteClass, deleteStudent, importStudents, moveClassOrder, moveStudents, nextSerial, renameClass, saveStudent, setStudentActive } from '../db/repo';
 import { useAuth } from '../auth';
 import { Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
-import { IArchive, IDown, IEdit, IMove, IPlus, IQr, ITrash, IUp, IUpload, IUsers } from '../components/Icons';
+import { IArchive, ICard, IDown, IEdit, IMove, IPlus, IQr, ITrash, IUp, IUpload, IUsers } from '../components/Icons';
 import { exportQrCards } from '../lib/qrCards';
+import { normCard } from '../lib/card';
+import { CardPairSheet } from '../components/CardPair';
 import { getSetting } from '../db/repo';
 import { parseExcel, downloadTemplate, type ParsedSheet } from '../lib/importExcel';
 import { pickFile } from '../lib/files';
@@ -66,6 +68,7 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
   const [selecting, setSelecting] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [moving, setMoving] = useState(false);
+  const [pairing, setPairing] = useState(false);
   const all = useLiveQuery(() => db.students.toArray(), []);
   const cmap = useMemo(() => new Map(classes.map((c) => [c.id, c])), [classes]);
 
@@ -106,6 +109,11 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
             <button className="btn sm ghost" onClick={() => setArchived((v) => !v)}>
               {archived ? t('active_btn') : t('archived_btn')}
             </button>
+            {!archived && list.length > 0 && (
+              <button className="btn sm ghost" aria-label={t('card_pair')} onClick={() => setPairing(true)}>
+                <ICard style={{ width: 18 }} />
+              </button>
+            )}
             {!archived && list.length > 0 && (
               <button
                 className="btn sm ghost"
@@ -183,6 +191,7 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
           </button>
         </div>
       )}
+      {pairing && <CardPairSheet students={list} onClose={() => setPairing(false)} />}
       {moving && (
         <Sheet onClose={() => setMoving(false)}>
           <h2>{t('move_n_to', { n: sel.size })}</h2>
@@ -219,7 +228,12 @@ function StudentForm({ init, classes, onClose }: { init: Partial<Student>; class
     if (!serial) serial = await nextSerial();
     const dup = await db.students.where('serial').equals(serial).first();
     if (dup && dup.id !== s.id) return ui.toast(t('serial_used', { serial, name: dup.name }), true);
-    await saveStudent({ ...s, serial, name: s.name, classId: s.classId });
+    const card = s.card?.trim() ? normCard(s.card) : undefined;
+    if (card) {
+      const owner = await db.students.where('card').equals(card).first();
+      if (owner && owner.id !== s.id) return ui.toast(t('card_used', { name: owner.name }), true);
+    }
+    await saveStudent({ ...s, card, serial, name: s.name, classId: s.classId });
     ui.toast(isNew ? t('student_added') : t('saved'));
     if (isNew && keepAdding) setS({ classId: s.classId });
     else onClose();
@@ -248,6 +262,8 @@ function StudentForm({ init, classes, onClose }: { init: Partial<Student>; class
           <input type="tel" inputMode="tel" dir="ltr" value={s.phone ?? ''} onChange={(e) => setS({ ...s, phone: e.target.value })} />
         </div>
       </div>
+      <label className="f">{t('card_no')}</label>
+      <input dir="ltr" inputMode="numeric" data-card-sink="1" value={s.card ?? ''} placeholder={t('card_manual_ph')} onChange={(e) => setS({ ...s, card: e.target.value })} />
       {isNew && (
         <label className="check">
           <input type="checkbox" checked={keepAdding} onChange={(e) => setKeepAdding(e.target.checked)} />
@@ -418,7 +434,7 @@ function DeleteClassSheet({ cls, classes, onClose }: { cls: ClassRoom; classes: 
 function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () => void }) {
   const ui = useUI();
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
-  const [map, setMap] = useState({ name: -1, serial: -1, phone: -1, className: -1 });
+  const [map, setMap] = useState({ name: -1, serial: -1, phone: -1, className: -1, card: -1 });
   const [defCls, setDefCls] = useState(classes[0]?.id ?? '');
   const [busy, setBusy] = useState(false);
 
@@ -442,16 +458,18 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
           serial: map.serial >= 0 ? parseInt(r[map.serial]) || undefined : undefined,
           phone: map.phone >= 0 ? r[map.phone] : undefined,
           className: map.className >= 0 ? r[map.className] : undefined,
+          card: map.card >= 0 ? r[map.card] || undefined : undefined,
         }))
         .filter((r) => r.name && r.name.length > 1 && !/^\d+$/.test(r.name))
     : [];
-  const needDefault = map.className < 0 || rows.some((r) => !r.className);
+  const linkOnly = map.card >= 0 && map.className < 0;
+  const needDefault = !linkOnly && (map.className < 0 || rows.some((r) => !r.className));
 
   const doImport = async () => {
     setBusy(true);
     try {
-      const res = await importStudents(rows, needDefault ? defCls || null : null);
-      ui.toast(t('imported', { n: res.added }) + (res.createdClasses ? t('imported_classes', { n: res.createdClasses }) : '') + (res.skipped ? t('imported_skipped', { n: res.skipped }) : ''));
+      const res = await importStudents(rows, needDefault ? defCls || null : null, linkOnly);
+      ui.toast(t('imported', { n: res.added }) + (res.createdClasses ? t('imported_classes', { n: res.createdClasses }) : '') + (res.skipped ? t('imported_skipped', { n: res.skipped }) : '') + (res.linked ? t('cards_linked', { n: res.linked }) : ''));
       onClose();
     } finally {
       setBusy(false);
@@ -500,7 +518,15 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
               <Col k="serial" label={t('col_serial')} />
             </div>
           </div>
-          <Col k="phone" label={t('col_phone')} />
+          <div className="row">
+            <div className="grow">
+              <Col k="phone" label={t('col_phone')} />
+            </div>
+            <div className="grow">
+              <Col k="card" label={t('col_card')} />
+            </div>
+          </div>
+          {linkOnly && <p className="small muted">{t('link_only_hint')}</p>}
           {needDefault && (
             <>
               <label className="f">{t('default_class')}</label>
@@ -527,7 +553,7 @@ function ImportSheet({ classes, onClose }: { classes: ClassRoom[]; onClose: () =
           </div>
           <div className="acts">
             <button className="btn" disabled={busy || !rows.length || map.name < 0 || (needDefault && !defCls && map.className < 0)} onClick={doImport}>
-              {t('import_n', { n: rows.length })}
+              {linkOnly ? t('link_cards_n', { n: rows.length }) : t('import_n', { n: rows.length })}
             </button>
             <button className="btn ghost" onClick={() => setParsed(null)}>
               {t('other_file')}

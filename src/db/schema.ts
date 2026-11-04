@@ -36,7 +36,7 @@ export interface Student {
   classId: string;
   serial: number; // الرقم التسلسلي
   phone?: string;
-  nfc?: string; // الرقم التسلسلي لبطاقة NFC المرتبطة بالطالب
+  card?: string; // رقم بطاقة الطالب (قارئ 125kHz أو NFC) بعد التوحيد عبر normCard
   active: 1 | 0; // 0 = مؤرشف (لا يظهر في التسجيل لكن يبقى سجله)
   createdAt: number;
   updatedAt: number;
@@ -115,7 +115,7 @@ export class AppDB extends Dexie {
     this.version(3)
       .stores({ activities: 'id, order' })
       .upgrade((tx) => tx.table('activities').put(defaultActivity()));
-    this.version(4).stores({ students: 'id, classId, serial, name, active, nfc' });
+    this.version(4).stores({ students: 'id, classId, serial, name, active, card' });
     this.on('populate', (tx) => {
       tx.table('activities').put(defaultActivity());
     });

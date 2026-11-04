@@ -5,7 +5,7 @@ import { t, isRTL } from '../i18n';
 export interface ParsedSheet {
   headers: string[];
   rows: string[][];
-  guess: { name: number; serial: number; phone: number; className: number };
+  guess: { name: number; serial: number; phone: number; className: number; card: number };
 }
 
 const norm = (s: unknown) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -16,7 +16,7 @@ export async function parseExcel(file: File): Promise<ParsedSheet> {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const aoa = (XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }) as unknown[][]).map((r) => r.map(norm));
   const nonEmpty = aoa.filter((r) => r.some((c) => c));
-  if (!nonEmpty.length) return { headers: [], rows: [], guess: { name: -1, serial: -1, phone: -1, className: -1 } };
+  if (!nonEmpty.length) return { headers: [], rows: [], guess: { name: -1, serial: -1, phone: -1, className: -1, card: -1 } };
 
   // البحث عن صف العناوين في أول 10 صفوف
   let hi = -1;
@@ -47,7 +47,9 @@ export async function parseExcel(file: File): Promise<ParsedSheet> {
     serial: find(/^م$|رقم|تسلسل|الرقم|serial|^no\.?$|numara|sıra|#/i),
     phone: find(/جوال|هاتف|موبايل|تلفون|phone|mobile|telefon|cep/i),
     className: find(/الصف|صف|الفصل|فصل|class|sınıf|sinif|grup/i),
+    card: find(/kart|card|بطاقة|rfid|nfc/i),
   };
+  if (guess.card === guess.serial) guess.serial = -1;
   if (guess.serial === guess.phone) guess.serial = -1;
   return { headers, rows, guess };
 }

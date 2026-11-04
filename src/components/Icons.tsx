@@ -39,3 +39,4 @@ export const IXls = base(<><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 11l
 export const IQr = base(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 17h4v4h-4" /></>);
 export const ICamSwitch = base(<><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><path d="M9 13a3 3 0 015-2.2M15 13a3 3 0 01-5 2.2M14 9v2h-2M10 17v-2h2" /></>);
 export const INfc = base(<><path d="M6 8.5a8 8 0 010 7M9.5 6.5a12 12 0 010 11M13 4.5a16 16 0 010 15" /><rect x="16" y="3" width="5" height="18" rx="1.5" /></>);
+export const ICard = base(<><rect x="2.5" y="5" width="19" height="14" rx="2" /><circle cx="8" cy="11" r="2" /><path d="M5 16c.6-1.6 1.7-2.4 3-2.4s2.4.8 3 2.4M14 10h4M14 13.5h4" /></>);
