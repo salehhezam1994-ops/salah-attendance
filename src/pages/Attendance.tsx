@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
-import { db, PRAYERS, isPrayerSlot, type Attendance, type Slot, type Student } from '../db/schema';
+import { db, PRAYERS, attId, isPrayerSlot, type Attendance, type Slot, type Student } from '../db/schema';
 import { markAll, clearSession, setNote, setStatus } from '../db/repo';
 import { useSel } from '../App';
 import { useAuth } from '../auth';
 import { DateBar, Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
-import { IAllCheck, ICheck, INote, IReset, ISearch, IUsers, IX } from '../components/Icons';
+import { IAllCheck, ICheck, INote, IQr, IReset, ISearch, IUsers, IX } from '../components/Icons';
+import { QrScanner, type ScanResult } from '../components/QrScanner';
+import { parseQr } from '../lib/qrCards';
 import { guessPrayer, todayISO } from '../lib/dates';
 import { SyncDot } from '../sync/SyncUI';
 import { t, type Key } from '../i18n';
@@ -22,6 +24,11 @@ export default function AttendancePage() {
   const [showSearch, setShowSearch] = useState(false);
   const [noteFor, setNoteFor] = useState<Student | null>(null);
   const acts = useActivities();
+  const [scanning, setScanning] = useState(false);
+  const [summary, setSummary] = useState(false);
+  const [scanN, setScanN] = useState(0);
+  const scanned = useRef(new Set<string>());
+  const touched = useRef(new Set<string>());
 
   const classes = useLiveQuery(async () => allowedClasses(await db.classes.orderBy('order').toArray()), [user.id]);
   const students = useLiveQuery(() => db.students.where('active').equals(1).toArray(), []);
@@ -90,6 +97,31 @@ export default function AttendancePage() {
     }
   };
 
+  const onScan = async (text: string): Promise<ScanResult> => {
+    const id = parseQr(text);
+    const s = id ? await db.students.get(id) : undefined;
+    if (!s) return { kind: 'bad', title: t('scan_bad'), sub: t('scan_bad_sub') };
+    const cls = classes.find((c) => c.id === s.classId);
+    if (!cls) return { kind: 'bad', title: s.name, sub: t('scan_not_allowed') };
+    if (!s.active) return { kind: 'bad', title: s.name, sub: t('scan_archived') };
+    const sub = cls.name + ' · ' + slotName(slot);
+    const prev = await db.attendance.get(attId(date, slot, s.id));
+    touched.current.add(s.classId);
+    if (prev?.status === 'P') return { kind: 'dup', title: s.name, sub: t('scan_dup') };
+    await setStatus(date, slot, s, 'P', user.id);
+    scanned.current.add(s.id);
+    setScanN(scanned.current.size);
+    return { kind: 'ok', title: s.name, sub };
+  };
+  const startScan = () => {
+    if (readOnly) return ui.toast(t('no_perm_past'), true);
+    scanned.current = new Set();
+    setScanN(0);
+    touched.current = new Set(activeClass ? [activeClass.id] : []);
+    setScanning(true);
+  };
+  const unmarkedIn = (cid: string) => (byClass.get(cid) ?? []).filter((s) => !recMap.has(s.id));
+
   const chooseGroup = (g: string) => set({ slot: g === PRAYER_GROUP ? guessPrayer() : groupSlots(g)[0] });
   const nextClass = classes[classes.findIndex((c) => c.id === activeClass?.id) + 1];
   const hasActs = (acts?.length ?? 0) > 0;
@@ -99,6 +131,11 @@ export default function AttendancePage() {
       <header className="topbar">
         <h1>{t('att_title')}</h1>
         <SyncDot />
+        {classes.length > 0 && !readOnly && (
+          <button className="ib" onClick={startScan} aria-label={t('qr_scan')}>
+            <IQr />
+          </button>
+        )}
         <button className="ib" onClick={() => (setShowSearch((v) => !v), setQ(''))} aria-label={t('search')}>
           <ISearch />
         </button>
@@ -209,6 +246,57 @@ export default function AttendancePage() {
           </>
         )}
       </main>
+      {scanning && (
+        <QrScanner
+          title={t('scan_title', { slot: slotName(slot) })}
+          onCode={onScan}
+          onClose={() => (setScanning(false), setSummary(true))}
+          footer={
+            <div className="scan-foot">
+              <span className="grow" style={{ alignSelf: 'center' }}>
+                {t('scan_count', { n: scanN })}
+              </span>
+              <button className="btn" onClick={() => (setScanning(false), setSummary(true))}>
+                {t('scan_finish')}
+              </button>
+            </div>
+          }
+        />
+      )}
+      {summary && (
+        <Sheet onClose={() => setSummary(false)}>
+          <h2>{t('qr_scan')}</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            {t('scan_summary', { n: scanN })}
+          </p>
+          {[...touched.current].map((cid) => {
+            const n = unmarkedIn(cid).length;
+            return n ? (
+              <div key={cid} className="small">
+                {t('scan_unmarked', { cls: classes.find((c) => c.id === cid)?.name ?? '', n })}
+              </div>
+            ) : null;
+          })}
+          <div className="acts">
+            {[...touched.current].some((cid) => unmarkedIn(cid).length) && (
+              <button
+                className="btn danger"
+                onClick={async () => {
+                  const list = [...touched.current].flatMap(unmarkedIn);
+                  await markAll(date, slot, list, 'A', false, user.id);
+                  ui.toast(t('marked_absent', { n: list.length }));
+                  setSummary(false);
+                }}
+              >
+                {t('mark_unscanned_absent', { n: [...touched.current].reduce((a, cid) => a + unmarkedIn(cid).length, 0) })}
+              </button>
+            )}
+            <button className="btn ghost" onClick={() => setSummary(false)}>
+              {t('leave_unmarked')}
+            </button>
+          </div>
+        </Sheet>
+      )}
       {noteFor && (
         <NoteSheet
           s={noteFor}

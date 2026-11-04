@@ -5,7 +5,9 @@ import { db, type Activity, type ClassRoom, type Student } from '../db/schema';
 import { addActivity, deleteActivity, moveActivityOrder, renameActivity, addClass, deleteClass, deleteStudent, importStudents, moveClassOrder, moveStudents, nextSerial, renameClass, saveStudent, setStudentActive } from '../db/repo';
 import { useAuth } from '../auth';
 import { Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
-import { IArchive, IDown, IEdit, IMove, IPlus, ITrash, IUp, IUpload, IUsers } from '../components/Icons';
+import { IArchive, IDown, IEdit, IMove, IPlus, IQr, ITrash, IUp, IUpload, IUsers } from '../components/Icons';
+import { exportQrCards } from '../lib/qrCards';
+import { getSetting } from '../db/repo';
 import { parseExcel, downloadTemplate, type ParsedSheet } from '../lib/importExcel';
 import { pickFile } from '../lib/files';
 import { t } from '../i18n';
@@ -104,6 +106,23 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
             <button className="btn sm ghost" onClick={() => setArchived((v) => !v)}>
               {archived ? t('active_btn') : t('archived_btn')}
             </button>
+            {!archived && list.length > 0 && (
+              <button
+                className="btn sm ghost"
+                aria-label={t('qr_cards')}
+                onClick={async () => {
+                  if (!(await ui.confirm(t('qr_cards_n', { n: list.length }), { ok: t('qr_cards') }))) return;
+                  try {
+                    await exportQrCards(list, classes, await getSetting('org', ''));
+                  } catch (e) {
+                    const m = (e as Error)?.message ?? '';
+                    if (!/cancel|abort/i.test(m)) ui.toast(t('export_failed', { e: m }), true);
+                  }
+                }}
+              >
+                <IQr style={{ width: 18 }} />
+              </button>
+            )}
             <button className={'btn sm ' + (selecting ? '' : 'ghost')} onClick={() => (setSelecting((v) => !v), setSel(new Set()))}>
               {selecting ? t('cancel_select') : t('select')}
             </button>

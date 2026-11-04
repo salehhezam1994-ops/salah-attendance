@@ -36,3 +36,5 @@ export const IUp = base(<path d="M6 15l6-6 6 6" />);
 export const IDown = base(<path d="M6 9l6 6 6-6" />);
 export const IPdf = base(<><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5" /><text x="7.5" y="17.5" fontSize="6" fill="currentColor" stroke="none" fontWeight="700">PDF</text></>);
 export const IXls = base(<><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 11l5 6M14 11l-5 6" /></>);
+export const IQr = base(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 17h4v4h-4" /></>);
+export const ICamSwitch = base(<><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><path d="M9 13a3 3 0 015-2.2M15 13a3 3 0 01-5 2.2M14 9v2h-2M10 17v-2h2" /></>);

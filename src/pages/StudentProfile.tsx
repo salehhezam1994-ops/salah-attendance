@@ -5,7 +5,8 @@ import { buildReport } from '../lib/stats';
 import { dayName, fmtShort, monthRange, todayISO, pct } from '../lib/dates';
 import { useAuth } from '../auth';
 import { Empty, RateBar, rateTone } from '../components/ui';
-import { IChevR } from '../components/Icons';
+import { IChevR, IQr } from '../components/Icons';
+import { exportQrCards } from '../lib/qrCards';
 import { ExportButtons, PeriodPicker, periodRange, type Period } from './Reports';
 import { studentDoc } from '../lib/reportDoc';
 import { getSetting } from '../db/repo';
@@ -141,6 +142,11 @@ export default function StudentProfile() {
         </div>
 
         {canExport && <ExportButtons make={() => studentDoc(report, org || undefined)} />}
+        {isAdmin && (
+          <button className="btn block light" onClick={() => exportQrCards([s.student], report.classes, org || '').catch(() => {})}>
+            <IQr /> {t('show_qr')}
+          </button>
+        )}
       </main>
     </>
   );
