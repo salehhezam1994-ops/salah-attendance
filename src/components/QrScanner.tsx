@@ -6,7 +6,7 @@ import { t } from '../i18n';
 export type ScanResult = { kind: 'ok' | 'dup' | 'bad'; title: string; sub?: string };
 
 let audio: AudioContext | null = null;
-function beep(ok: boolean) {
+export function beep(ok: boolean) {
   try {
     audio ??= new AudioContext();
     const o = audio.createOscillator();

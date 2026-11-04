@@ -261,3 +261,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .scan-res.ok{background:#157347}.scan-res.dup{background:#9a6700}.scan-res.bad{background:#b02a37}
 .scan-recent{display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px 0;max-height:64px;overflow:hidden}
 .scan-foot{display:flex;gap:8px;padding:10px 12px 12px}
+.nfc-view{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:20px;background:#101814}
+.nfc-view p{font-size:17px;max-width:300px;margin:0;line-height:1.6}
+.nfc-ico{width:110px;height:110px;color:#4ade80}
+.nfc-ico.pulse{animation:nfcp 1.6s ease-in-out infinite}
+@keyframes nfcp{0%,100%{opacity:.45;transform:scale(.94)}50%{opacity:1;transform:scale(1)}}
