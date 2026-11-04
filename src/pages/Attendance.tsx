@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
 import { db, PRAYERS, attId, isPrayerSlot, type Attendance, type Slot, type Student } from '../db/schema';
-import { markAll, clearSession, setNote, setStatus } from '../db/repo';
+import { bulkSet, markAll, setNote, setStatus } from '../db/repo';
 import { useSel } from '../App';
 import { useAuth } from '../auth';
 import { DateBar, Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
@@ -10,7 +10,9 @@ import { IAllCheck, ICard, ICheck, INote, IQr, IReset, ISearch, IUsers, IX } fro
 import { QrScanner, type ScanResult } from '../components/QrScanner';
 import { parseQr } from '../lib/qrCards';
 import { CardPanel } from '../components/CardPanel';
-import { guessPrayer, todayISO } from '../lib/dates';
+import { fromISO, guessPrayer, todayISO } from '../lib/dates';
+import { hhmm, prayerTimes } from '../lib/prayerTimes';
+import { ALL } from '../App';
 import { SyncDot } from '../sync/SyncUI';
 import { t, type Key } from '../i18n';
 import { PRAYER_GROUP, groupName, groupSlots, slotGroup, slotName, useActivities } from '../lib/slots';
@@ -31,15 +33,22 @@ export default function AttendancePage() {
   const scanned = useRef(new Set<string>());
   const touched = useRef(new Set<string>());
 
+  const [allP, setAllP] = useState(false);
   const classes = useLiveQuery(async () => allowedClasses(await db.classes.orderBy('order').toArray()), [user.id]);
   const students = useLiveQuery(() => db.students.where('active').equals(1).toArray(), []);
-  const recs = useLiveQuery(() => db.attendance.where('[date+prayer]').equals([date, slot]).toArray(), [date, slot]);
   const dayRecs = useLiveQuery(() => db.attendance.where('date').equals(date).toArray(), [date]);
 
   const group = slotGroup(slot);
   const slots = groupSlots(group);
-  const activeClass = classes?.find((c) => c.id === classId) ?? classes?.[0];
-  const recMap = useMemo(() => new Map((recs ?? []).map((r) => [r.studentId, r])), [recs]);
+  const multiP = allP && isPrayerSlot(slot);
+  const scopeSlots: Slot[] = multiP ? [...PRAYERS] : [slot];
+  const allCls = classId === ALL;
+  const activeClass = allCls ? undefined : classes?.find((c) => c.id === classId) ?? classes?.[0];
+  const scopeClasses = allCls ? classes ?? [] : activeClass ? [activeClass] : [];
+
+  // سجلات اليوم: المفتاح «الوقت|الطالب»
+  const cell = useMemo(() => new Map((dayRecs ?? []).map((r) => [r.prayer + '|' + r.studentId, r])), [dayRecs]);
+  const recMap = useMemo(() => new Map((dayRecs ?? []).filter((r) => r.prayer === slot).map((r) => [r.studentId, r])), [dayRecs, slot]);
 
   const byClass = useMemo(() => {
     const m = new Map<string, Student[]>();
@@ -52,50 +61,49 @@ export default function AttendancePage() {
     return m;
   }, [students]);
 
-  const list = activeClass ? byClass.get(activeClass.id) ?? [] : [];
+  const list = scopeClasses.flatMap((c) => byClass.get(c.id) ?? []);
   const shown = list.filter((s) => matchStudent(q, s.name, s.serial));
-  const present = list.filter((s) => recMap.get(s.id)?.status === 'P').length;
-  const absent = list.filter((s) => recMap.get(s.id)?.status === 'A').length;
-  const unmarked = list.length - present - absent;
-
-  // هل اكتمل تسجيل وقت معين للصف الحالي؟ (نقطة خضراء)
-  const slotDone = useMemo(() => {
-    const ids = new Set(list.map((s) => s.id));
-    const out: Record<string, boolean> = {};
-    for (const p of slots) {
-      const n = (dayRecs ?? []).filter((r) => r.prayer === p && ids.has(r.studentId)).length;
-      out[p] = ids.size > 0 && n >= ids.size;
+  let present = 0,
+    absent = 0;
+  for (const st of list)
+    for (const sl of scopeSlots) {
+      const r = cell.get(sl + '|' + st.id);
+      if (r?.status === 'P') present++;
+      else if (r?.status === 'A') absent++;
     }
-    return out;
-  }, [dayRecs, list, slots]);
+  const unmarked = list.length * scopeSlots.length - present - absent;
+
+  // هل اكتمل تسجيل وقت معين للنطاق الحالي؟ (نقطة خضراء)
+  const slotDone: Record<string, boolean> = {};
+  for (const p of slots) slotDone[p] = list.length > 0 && list.every((st) => cell.has(p + '|' + st.id));
+  const times = useMemo(() => prayerTimes(fromISO(date)), [date]);
 
   const readOnly = !isAdmin && !user.perms.editPastDays && date !== todayISO();
 
   if (!classes || !students) return null;
 
-  const toggle = async (s: Student, to?: 'P' | 'A') => {
+  const toggle = async (s: Student, to?: 'P' | 'A', sl: Slot = slot) => {
     if (readOnly) return ui.toast(t('no_perm_past'), true);
-    const cur = recMap.get(s.id)?.status;
-    const next = to ?? (cur === 'P' ? 'A' : 'P');
+    const cur = cell.get(sl + '|' + s.id)?.status;
+    const next = to ?? (cur === 'P' ? 'A' : cur === 'A' ? null : 'P');
     if (navigator.vibrate) navigator.vibrate(12);
-    await setStatus(date, slot, s, cur === next && to ? null : next, user.id);
+    await setStatus(date, sl, s, to && cur === to ? null : next, user.id);
   };
 
-  const allPresent = async () => {
+  /** الأزرار الثلاثة: حاضر للجميع / غائب للجميع / إلغاء التحديد */
+  const bulk = async (status: 'P' | 'A' | null) => {
     if (readOnly) return ui.toast(t('no_perm_past'), true);
-    if (unmarked > 0) {
-      await markAll(date, slot, list, 'P', false, user.id);
-      ui.toast(t('toast_marked', { n: unmarked }));
-    } else if (absent > 0 && (await ui.confirm(t('confirm_all_present'), { ok: t('ok_all_present') }))) {
-      await markAll(date, slot, list, 'P', true, user.id);
-    }
-  };
-
-  const reset = async () => {
-    if (readOnly) return;
-    if (await ui.confirm(t('confirm_clear', { slot: slotName(slot), cls: activeClass?.name ?? '' }), { ok: t('clear'), danger: true })) {
-      await clearSession(date, slot, list);
-    }
+    if (!list.length) return;
+    const scopeTxt = t('bulk_scope', {
+      slots: multiP ? t('all_prayers') : slotName(slot),
+      cls: allCls ? t('all_classes') : activeClass?.name ?? '',
+      n: list.length,
+    });
+    const action = status === 'P' ? t('bulk_present') : status === 'A' ? t('bulk_absent') : t('bulk_clear');
+    const risky = status !== 'P' || absent > 0 || multiP || allCls;
+    if (risky && !(await ui.confirm(scopeTxt, { title: action, ok: action, danger: status !== 'P' }))) return;
+    const n = await bulkSet(date, scopeSlots, list, status, user.id);
+    ui.toast(t('bulk_done', { n }));
   };
 
   const onScan = async (text: string): Promise<ScanResult> => {
@@ -126,13 +134,12 @@ export default function AttendancePage() {
     if (readOnly) return ui.toast(t('no_perm_past'), true);
     scanned.current = new Set();
     setScanN(0);
-    touched.current = new Set(activeClass ? [activeClass.id] : []);
+    touched.current = new Set(scopeClasses.map((c) => c.id));
     setScanning(mode);
   };
-  const unmarkedIn = (cid: string) => (byClass.get(cid) ?? []).filter((s) => !recMap.has(s.id));
+  const unmarkedIn = (cid: string) => (byClass.get(cid) ?? []).filter((s) => !cell.has(slot + '|' + s.id));
 
   const chooseGroup = (g: string) => set({ slot: g === PRAYER_GROUP ? guessPrayer() : groupSlots(g)[0] });
-  const nextClass = classes[classes.findIndex((c) => c.id === activeClass?.id) + 1];
   const hasActs = (acts?.length ?? 0) > 0;
 
   return (
@@ -153,11 +160,6 @@ export default function AttendancePage() {
         <button className="ib" onClick={() => (setShowSearch((v) => !v), setQ(''))} aria-label={t('search')}>
           <ISearch />
         </button>
-        {list.length > 0 && !readOnly && (
-          <button className="ib" onClick={reset} aria-label={t('clear_aria')}>
-            <IReset />
-          </button>
-        )}
       </header>
       <main className="content">
         <DateBar value={date} onChange={(d) => set({ date: d })} />
@@ -173,11 +175,16 @@ export default function AttendancePage() {
         )}
         {isPrayerSlot(slot) && (
           <>
-            <div className="seg">
+            <div className="seg seg6">
+              <button className={multiP ? 'on' : ''} onClick={() => setAllP(true)}>
+                {t('all_short')}
+                <small>{t('all_prayers_short')}</small>
+              </button>
               {PRAYERS.map((p) => (
-                <button key={p} className={p === slot ? 'on' : ''} onClick={() => set({ slot: p })}>
+                <button key={p} className={!multiP && p === slot ? 'on' : ''} onClick={() => (setAllP(false), set({ slot: p }))}>
                   {slotDone[p] && <span className="dot" />}
                   {slotName(p)}
+                  <small>{hhmm(times[p])}</small>
                 </button>
               ))}
             </div>
@@ -195,6 +202,19 @@ export default function AttendancePage() {
         ) : (
           <>
             <div className="chips">
+              {classes.length > 1 &&
+                (() => {
+                  const n = (students ?? []).filter((st) => classes.some((c) => c.id === st.classId) && recMap.has(st.id)).length;
+                  const tot = classes.reduce((a, c) => a + (byClass.get(c.id)?.length ?? 0), 0);
+                  return (
+                    <button className={'chip' + (allCls ? ' on' : '') + (tot && n >= tot ? ' done' : '')} onClick={() => set({ classId: ALL })}>
+                      {t('all_classes')}
+                      <span className="badge">
+                        {n}/{tot}
+                      </span>
+                    </button>
+                  );
+                })()}
               {classes.map((c) => {
                 const ss = byClass.get(c.id) ?? [];
                 const n = ss.filter((s) => recMap.has(s.id)).length;
@@ -238,23 +258,33 @@ export default function AttendancePage() {
               <Empty icon={<IUsers />} text={t('no_students_class')} />
             ) : (
               <div className="att-list">
-                {shown.map((s) => (
-                  <Row key={s.id} s={s} r={recMap.get(s.id)} onToggle={toggle} onNote={() => setNoteFor(s)} />
-                ))}
+                {shown.map((s, i) => {
+                  const head = allCls && (i === 0 || shown[i - 1].classId !== s.classId);
+                  return (
+                    <div key={s.id}>
+                      {head && <div className="att-head">{classes.find((c) => c.id === s.classId)?.name}</div>}
+                      {multiP ? (
+                        <MultiRow s={s} get={(sl) => cell.get(sl + '|' + s.id)} onToggle={(sl) => toggle(s, undefined, sl)} />
+                      ) : (
+                        <Row s={s} r={recMap.get(s.id)} onToggle={toggle} onNote={() => setNoteFor(s)} />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {list.length > 0 && !readOnly && (
-              <div className="actionbar">
-                {unmarked === 0 && nextClass ? (
-                  <button className="btn ok grow" onClick={() => set({ classId: nextClass.id })}>
-                    {t('next_class', { name: nextClass.name })}
-                  </button>
-                ) : (
-                  <button className="btn ok grow" onClick={allPresent} disabled={unmarked === 0 && absent === 0}>
-                    <IAllCheck /> {unmarked > 0 ? t('mark_rest', { n: unmarked }) : t('mark_all')}
-                  </button>
-                )}
+              <div className="actionbar bulkbar">
+                <button className="bk p" onClick={() => bulk('P')}>
+                  <IAllCheck /> {t('bulk_present_short')}
+                </button>
+                <button className="bk a" onClick={() => bulk('A')}>
+                  <IX /> {t('bulk_absent_short')}
+                </button>
+                <button className="bk c" onClick={() => bulk(null)}>
+                  <IReset /> {t('bulk_clear_short')}
+                </button>
               </div>
             )}
           </>
@@ -326,6 +356,29 @@ export default function AttendancePage() {
         />
       )}
     </>
+  );
+}
+
+/** صف الطالب في وضع «كل الصلوات»: خمسة أزرار صغيرة، كل ضغطة: حاضر ← غائب ← بلا */
+function MultiRow({ s, get, onToggle }: { s: Student; get: (sl: Slot) => Attendance | undefined; onToggle: (sl: Slot) => void }) {
+  return (
+    <div className="att multi">
+      <span className="num">{s.serial}</span>
+      <div className="nm">
+        {s.name}
+        <div className="mini">
+          {PRAYERS.map((p) => {
+            const st = get(p)?.status;
+            return (
+              <button key={p} className={st ?? ''} onClick={() => onToggle(p)}>
+                {st === 'P' ? '✓ ' : st === 'A' ? '✕ ' : ''}
+                {slotName(p)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 

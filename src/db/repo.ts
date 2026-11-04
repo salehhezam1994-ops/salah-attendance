@@ -312,3 +312,35 @@ export async function importBackup(json: string) {
     await db.settings.bulkAdd((data.settings ?? []).filter((x: { key: string }) => !LOCAL_SETTINGS.has(x.key)));
   });
 }
+
+/**
+ * تحديد جماعي لعدة صلوات/صفوف دفعة واحدة:
+ * 'P' أو 'A' ← يُسجَّل لمن ليست هذه حالته (من له نفس الحالة يبقى سجله وملاحظته كما هي)
+ * null ← حذف السجلات (إلغاء التحديد)
+ * يرجع عدد السجلات التي تغيّرت فعلًا
+ */
+export async function bulkSet(date: string, slots: Slot[], students: Student[], status: 'P' | 'A' | null, by?: string) {
+  let changed = 0;
+  await db.transaction('rw', db.attendance, async () => {
+    for (const slot of slots) {
+      const ids = students.map((s) => attId(date, slot, s.id));
+      const prev = await db.attendance.bulkGet(ids);
+      if (status === null) {
+        const del = ids.filter((_, i) => prev[i]);
+        changed += del.length;
+        if (del.length) await db.attendance.bulkDelete(del);
+        continue;
+      }
+      const now = Date.now();
+      const recs: Attendance[] = [];
+      students.forEach((s, i) => {
+        const p = prev[i];
+        if (p?.status === status) return;
+        recs.push({ id: ids[i], date, prayer: slot, studentId: s.id, classId: p?.classId ?? s.classId, status, excused: 0, updatedAt: now, by });
+      });
+      changed += recs.length;
+      if (recs.length) await db.attendance.bulkPut(recs);
+    }
+  });
+  return changed;
+}

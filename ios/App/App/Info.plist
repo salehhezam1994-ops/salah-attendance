@@ -47,5 +47,7 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Öğrenci QR kartlarını okutarak yoklama almak için / لمسح بطاقات QR للطلاب عند التحضير</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Namaz vakitlerini bulunduğunuz yere göre hesaplamak için / لحساب مواقيت الصلاة حسب موقعك</string>
 </dict>
 </plist>

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { HashRouter, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App as CapApp } from '@capacitor/app';
@@ -13,7 +13,7 @@ import StudentsPage from './pages/Students';
 import StudentProfile from './pages/StudentProfile';
 import ReportsPage from './pages/Reports';
 import MorePage from './pages/More';
-import { guessPrayer, todayISO } from './lib/dates';
+import { addDays, guessPrayer, todayISO } from './lib/dates';
 import { LangProvider, t } from './i18n';
 import { useActivities } from './lib/slots';
 
@@ -26,10 +26,37 @@ interface Sel {
 }
 const SelCtx = createContext<Sel>(null as never);
 export const useSel = () => useContext(SelCtx);
+export const ALL = '__all'; // «كل الصفوف» في شاشة التسجيل
 
 function SelProvider({ children }: { children: ReactNode }) {
   const [s, setS] = useState({ date: todayISO(), slot: guessPrayer() as Slot, classId: null as string | null });
   const set = useCallback((p: Partial<typeof s>) => setS((o) => ({ ...o, ...p })), []);
+  // الانتقال التلقائي للصلاة الحالية عند دخول وقتها، ما لم يغيّرها المستخدم يدويًا
+  const lastAuto = useRef(s.slot);
+  useEffect(() => {
+    const tick = () => {
+      const cur = guessPrayer();
+      const today = todayISO();
+      setS((o) => {
+        const prevAuto = lastAuto.current;
+        lastAuto.current = cur;
+        if (cur === prevAuto && (o.date === today || cur === 'isha')) return o;
+        const followAuto = o.slot === prevAuto;
+        // تغيّر اليوم بعد منتصف الليل: انتقل لليوم الجديد إن كان المستخدم على «اليوم»
+        const date = o.date === addDays(today, -1) && followAuto && cur !== 'isha' ? today : o.date;
+        return followAuto ? { ...o, slot: cur, date } : o;
+      });
+    };
+    const id = window.setInterval(tick, 20000);
+    const vis = () => document.visibilityState === 'visible' && tick();
+    document.addEventListener('visibilitychange', vis);
+    window.addEventListener('salah-loc', tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', vis);
+      window.removeEventListener('salah-loc', tick);
+    };
+  }, []);
   return <SelCtx.Provider value={{ ...s, set }}>{children}</SelCtx.Provider>;
 }
 

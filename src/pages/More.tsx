@@ -10,6 +10,7 @@ import { todayISO } from '../lib/dates';
 import { SyncCard } from '../sync/SyncUI';
 import { requeueAll } from '../sync/sync';
 import { t, LangSwitch } from '../i18n';
+import { LocationCard } from '../components/LocationCard';
 
 export default function MorePage() {
   const { user, isAdmin, logout } = useAuth();
@@ -116,6 +117,8 @@ export default function MorePage() {
             </div>
           </>
         )}
+
+        <LocationCard />
 
         <div className="card">
           <h3>{t('language')}</h3>

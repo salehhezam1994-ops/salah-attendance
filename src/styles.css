@@ -266,3 +266,20 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .nfc-ico{width:110px;height:110px;color:#4ade80}
 .nfc-ico.pulse{animation:nfcp 1.6s ease-in-out infinite}
 @keyframes nfcp{0%,100%{opacity:.45;transform:scale(.94)}50%{opacity:1;transform:scale(1)}}
+
+/* ---------- كل الصلوات / الأزرار الجماعية ---------- */
+.seg.seg6 { grid-template-columns: 0.8fr repeat(5, 1fr); }
+.seg button small { display: block; font-size: 10.5px; font-weight: 500; opacity: .75; margin-top: 1px; letter-spacing: .2px; }
+.seg button { padding: 7px 1px; font-size: 14px; }
+.att-head { background: var(--brand-soft); color: var(--brand); font-weight: 700; font-size: 13px; padding: 6px 14px; }
+.att.multi { align-items: flex-start; }
+.att .mini { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.att .mini button { flex: 1; min-width: 52px; font-size: 12px; font-weight: 700; padding: 6px 2px; border-radius: 8px; border: 1px solid var(--line, #dfe5e2); background: #fff; color: var(--muted); }
+.att .mini button.P { background: var(--ok); border-color: var(--ok); color: #fff; }
+.att .mini button.A { background: var(--bad); border-color: var(--bad); color: #fff; }
+.bulkbar { gap: 6px; }
+.bulkbar .bk { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 9px 4px; border-radius: 12px; font-weight: 700; font-size: 13.5px; box-shadow: var(--shadow); }
+.bulkbar .bk svg { width: 17px; height: 17px; }
+.bulkbar .bk.p { background: var(--ok); color: #fff; }
+.bulkbar .bk.a { background: var(--bad); color: #fff; }
+.bulkbar .bk.c { background: #fff; color: var(--text, #1b1f1d); border: 1px solid #d5ddd9; }

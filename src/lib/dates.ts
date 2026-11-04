@@ -1,3 +1,4 @@
+import { currentPrayer } from './prayerTimes';
 import type { Prayer } from '../db/schema';
 import { getLang } from '../i18n';
 
@@ -70,14 +71,9 @@ export function daysBetween(from: string, to: string): string[] {
   return out;
 }
 
-/** تخمين الصلاة الحالية حسب الوقت لتسهيل الفتح السريع */
+/** الصلاة الحالية حسب مواقيت الموقع المحدد */
 export function guessPrayer(now = new Date()): Prayer {
-  const h = now.getHours() + now.getMinutes() / 60;
-  if (h < 10) return 'fajr';
-  if (h < 15) return 'dhuhr';
-  if (h < 17.75) return 'asr';
-  if (h < 19.25) return 'maghrib';
-  return 'isha';
+  return currentPrayer(now);
 }
 
 export const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
