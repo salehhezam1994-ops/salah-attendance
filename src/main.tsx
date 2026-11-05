@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@fontsource/tajawal/400.css';
@@ -20,3 +21,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <App />
   </React.StrictMode>,
 );
+
+// نسخة الويب (الآيفون): العمل دون إنترنت
+if (!Capacitor.isNativePlatform() && 'serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}

@@ -13,7 +13,19 @@ export async function saveFile(base64: string, filename: string, mime: string) {
   const bin = atob(base64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  const blob = new Blob([bytes], { type: mime });
+  // الآيفون/أندرويد عبر المتصفح: نافذة المشاركة إن أمكن (حفظ في الملفات، واتساب...)
+  try {
+    const file = new File([blob], filename, { type: mime });
+    const nav = navigator as Navigator & { canShare?: (d: object) => boolean };
+    if (/iPhone|iPad|Android/i.test(navigator.userAgent) && nav.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return;
+    }
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') return;
+  }
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
