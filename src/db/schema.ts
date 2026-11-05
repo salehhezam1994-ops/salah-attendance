@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { t } from '../i18n';
+import { currentSchool, dbNameFor } from '../lib/schools';
 
 /** الصلوات الخمس بالترتيب */
 export const PRAYERS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
@@ -103,7 +104,7 @@ export class AppDB extends Dexie {
   activities!: Table<Activity, string>;
 
   constructor() {
-    super('salah_attendance');
+    super(dbNameFor(currentSchool()));
     this.version(1).stores({
       classes: 'id, order, name',
       students: 'id, classId, serial, name, active',

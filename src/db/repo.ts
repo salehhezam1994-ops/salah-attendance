@@ -140,7 +140,9 @@ export async function importStudents(rows: ImportRow[], defaultClassId: string |
     createdClasses = 0;
   await db.transaction('rw', db.classes, db.students, async () => {
     const classes = await db.classes.toArray();
-    const byName = new Map(classes.map((c) => [c.name.trim(), c.id]));
+    // مطابقة أسماء الصفوف مع تجاهل المسافات وحالة الأحرف وأشكال الألف
+    const ck = (n: string) => n.replace(/\s+/g, ' ').trim().replace(/[أإآ]/g, 'ا').toLocaleLowerCase('tr');
+    const byName = new Map(classes.map((c) => [ck(c.name), c.id]));
     const existing = await db.students.toArray();
     const key = (n: string, c: string) => n.replace(/\s+/g, ' ').trim() + '::' + c;
     const seen = new Set(existing.map((s) => key(s.name, s.classId)));
@@ -174,11 +176,11 @@ export async function importStudents(rows: ImportRow[], defaultClassId: string |
       let classId = defaultClassId;
       if (r.className?.trim()) {
         const cn = r.className.trim();
-        classId = byName.get(cn) ?? null;
+        classId = byName.get(ck(cn)) ?? null;
         if (!classId) {
           const c: ClassRoom = { id: uid(), name: cn, order: ++order, createdAt: Date.now(), updatedAt: Date.now() };
           await db.classes.add(c);
-          byName.set(cn, c.id);
+          byName.set(ck(cn), c.id);
           classId = c.id;
           createdClasses++;
         }

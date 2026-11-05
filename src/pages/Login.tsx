@@ -6,6 +6,7 @@ import { IMosque } from '../components/Icons';
 import { JoinSchool } from '../sync/SyncUI';
 import { syncAvailable } from '../sync/sync';
 import { t, LangSwitch } from '../i18n';
+import { SchoolPicker } from '../components/SchoolSwitch';
 
 function PinPad({ value, onChange, len = 4 }: { value: string; onChange: (v: string) => void; len?: number }) {
   return (
@@ -74,6 +75,7 @@ export function Setup({ onDone }: { onDone: (id: string) => void }) {
     <div className="auth">
       <Logo sub={t('setup_sub')} />
       <LangSwitch />
+      <SchoolPicker />
       {joining ? (
         <JoinSchool onCancel={() => setJoining(false)} />
       ) : (
@@ -145,6 +147,7 @@ export function Login({ onLogin }: { onLogin: (id: string) => void }) {
     <div className="auth">
       <Logo sub={t('login_sub')} />
       <LangSwitch />
+      <SchoolPicker />
       <div className="card">
         {!selected ? (
           <>

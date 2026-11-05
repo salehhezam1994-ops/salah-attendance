@@ -13,6 +13,7 @@ import { requeueAll } from '../sync/sync';
 import { clearHistory, withoutHistory } from '../lib/history';
 import { t, LangSwitch } from '../i18n';
 import { LocationCard } from '../components/LocationCard';
+import { SchoolsCard } from '../components/SchoolSwitch';
 
 export default function MorePage() {
   const { user, isAdmin, logout } = useAuth();
@@ -130,6 +131,7 @@ export default function MorePage() {
         </div>
 
         <SyncCard isAdmin={isAdmin} />
+        <SchoolsCard />
 
         {!isAdmin && (
           <div className="card">

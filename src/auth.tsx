@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type ClassRoom, type User } from './db/schema';
+import { sessionKey } from './lib/schools';
 
 interface Auth {
   user: User;
@@ -12,18 +13,17 @@ interface Auth {
 const AuthCtx = createContext<Auth>(null as never);
 export const useAuth = () => useContext(AuthCtx);
 
-const KEY = 'salah.session';
 export function getSessionUserId(): string | null {
   try {
-    return localStorage.getItem(KEY);
+    return localStorage.getItem(sessionKey());
   } catch {
     return null;
   }
 }
 export function setSessionUserId(id: string | null) {
   try {
-    if (id) localStorage.setItem(KEY, id);
-    else localStorage.removeItem(KEY);
+    if (id) localStorage.setItem(sessionKey(), id);
+    else localStorage.removeItem(sessionKey());
   } catch {
     /* ignore */
   }

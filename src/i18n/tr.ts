@@ -479,4 +479,13 @@ export const tr = {
   redone: 'Yinelendi: {label}',
   undo_skipped: ' ({n} kayıt başka biri tarafından değiştirildiği için korundu)',
   nothing_undo: 'Geri alınacak işlem yok',
+  schools_title: 'Bu cihazdaki okullar',
+  schools_hint: 'Her okulun verileri (öğrenciler, yoklama, kullanıcılar, senkron kodu) ayrı tutulur ve birbirine karışmaz.',
+  school_add: 'Okul ekle',
+  school_add_confirm: 'Boş yeni bir okul açılacak. Orada yeni yönetici hesabı oluşturabilir veya diğer okulun koduyla katılabilirsiniz. Mevcut okulun verileri olduğu gibi kalır.',
+  school_del_confirm: '"{name}" okulunun verileri yalnızca bu cihazdan silinecek (buluttaki kopyası silinmez). Emin misiniz?',
+  school_current: 'Şu an açık',
+  school_open: 'Aç',
+  school_unnamed: 'Okul {n}',
+  school_label: 'Okul:',
 };
