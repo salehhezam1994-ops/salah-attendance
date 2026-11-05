@@ -9,8 +9,10 @@ import '@fontsource/inter/700.css';
 import './styles.css';
 import App from './App';
 import { installHooks, startSync } from './sync/sync';
+import { installHistoryHooks } from './lib/history';
 
 installHooks();
+installHistoryHooks();
 void startSync();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

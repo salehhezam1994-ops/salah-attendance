@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { UndoBar } from '../components/UndoBar';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
 import { db, PRAYERS, attId, isPrayerSlot, type Attendance, type Slot, type Student } from '../db/schema';
@@ -146,6 +147,7 @@ export default function AttendancePage() {
     <>
       <header className="topbar">
         <h1>{t('att_title')}</h1>
+        <UndoBar />
         <SyncDot />
         {classes.length > 0 && !readOnly && (
           <>

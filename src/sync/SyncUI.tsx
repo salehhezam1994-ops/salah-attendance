@@ -32,9 +32,9 @@ export function SyncDot() {
   const ok = s.online && s.pending === 0 && !s.error;
   const title = !s.online ? t('offline_long') : s.pending ? t('pending', { n: s.pending }) : t('dot_synced');
   return (
-    <span title={title} aria-label={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, background: 'rgba(255,255,255,.15)', borderRadius: 999, padding: '3px 8px' }}>
+    <span title={title} aria-label={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, background: 'rgba(255,255,255,.15)', borderRadius: 999, padding: s.pending ? '3px 8px' : '6px', flexShrink: 0 }}>
       <i style={{ width: 8, height: 8, borderRadius: 9, background: ok ? '#4ade80' : '#fbbf24', display: 'inline-block' }} />
-      {ok ? t('dot_synced') : !s.online ? t('dot_offline') : s.pending ? t('dot_pending', { n: s.pending }) : t('dot_sync')}
+      {s.pending > 0 ? s.pending : ''}
     </span>
   );
 }

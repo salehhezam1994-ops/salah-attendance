@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { UndoBar } from '../components/UndoBar';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, FULL_PERMS, type Permissions, type User } from '../db/schema';
 import { createUser, exportBackup, getSetting, hashPin, importBackup, setSetting } from '../db/repo';
@@ -9,6 +10,7 @@ import { pickFile, saveFile, textToBase64 } from '../lib/files';
 import { todayISO } from '../lib/dates';
 import { SyncCard } from '../sync/SyncUI';
 import { requeueAll } from '../sync/sync';
+import { clearHistory, withoutHistory } from '../lib/history';
 import { t, LangSwitch } from '../i18n';
 import { LocationCard } from '../components/LocationCard';
 
@@ -31,7 +33,8 @@ export default function MorePage() {
     if (!f) return;
     if (!(await ui.confirm(t('confirm_restore'), { ok: t('restore_btn'), danger: true }))) return;
     try {
-      await importBackup(await f.text());
+      await withoutHistory(async () => importBackup(await f.text()));
+      clearHistory();
       await requeueAll();
       ui.toast(t('restored_data'));
       setTimeout(() => location.reload(), 800);
@@ -44,6 +47,7 @@ export default function MorePage() {
     <>
       <header className="topbar">
         <h1>{t('more_title')}</h1>
+        <UndoBar />
       </header>
       <main className="content">
         <div className="card row">

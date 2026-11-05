@@ -283,3 +283,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .bulkbar .bk.p { background: var(--ok); color: #fff; }
 .bulkbar .bk.a { background: var(--bad); color: #fff; }
 .bulkbar .bk.c { background: #fff; color: var(--text, #1b1f1d); border: 1px solid #d5ddd9; }
+
+/* ---------- التراجع / الإعادة ---------- */
+.undobar { display: flex; flex-shrink: 0; background: rgba(255,255,255,.14); border-radius: 999px; overflow: hidden; }
+.undobar button { width: 36px; height: 34px; display: grid; place-items: center; color: #fff; }
+.undobar button + button { border-inline-start: 1px solid rgba(255,255,255,.18); }
+.undobar button:disabled { color: rgba(255,255,255,.35); }
+.undobar svg { width: 19px; height: 19px; }
+[dir='rtl'] .flip-rtl { transform: scaleX(-1); }

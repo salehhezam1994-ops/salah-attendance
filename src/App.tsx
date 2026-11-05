@@ -16,6 +16,7 @@ import MorePage from './pages/More';
 import { addDays, guessPrayer, todayISO } from './lib/dates';
 import { LangProvider, t } from './i18n';
 import { useActivities } from './lib/slots';
+import { clearHistory } from './lib/history';
 
 // حالة مشتركة بين الشاشات: التاريخ والوقت (صلاة أو نشاط) والصف المختار
 interface Sel {
@@ -129,6 +130,7 @@ function Root() {
     setUid(id);
   }, []);
   const logout = useCallback(() => {
+    clearHistory();
     setSessionUserId(null);
     setUid(null);
     location.hash = '#/';

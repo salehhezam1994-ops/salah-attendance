@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { UndoBar } from '../components/UndoBar';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate, useParams } from 'react-router-dom';
 import { buildReport } from '../lib/stats';
@@ -41,6 +42,7 @@ export default function StudentProfile() {
           <IChevR />
         </button>
         <h1>{s.student.name}</h1>
+        <UndoBar />
       </header>
       <main className="content">
         <div className="card row">

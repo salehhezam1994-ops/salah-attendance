@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { UndoBar } from '../components/UndoBar';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
 import { db, type Slot } from '../db/schema';
@@ -40,6 +41,7 @@ export default function DashboardPage() {
     <>
       <header className="topbar">
         <h1>{t('dash_title')}</h1>
+        <UndoBar />
       </header>
       <main className="content">
         <DateBar value={date} onChange={(d) => set({ date: d })} />

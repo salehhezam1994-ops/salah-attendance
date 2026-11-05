@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { UndoBar } from '../components/UndoBar';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/schema';
 import { useAuth } from '../auth';
@@ -225,6 +226,7 @@ export default function ReportsPage() {
     <>
       <header className="topbar">
         <h1>{t('reports_title')}</h1>
+        <UndoBar />
       </header>
       <main className="content">
         <div className="tabs">

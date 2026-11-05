@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { UndoBar } from '../components/UndoBar';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
 import { db, type Activity, type ClassRoom, type Student } from '../db/schema';
@@ -8,6 +9,7 @@ import { Empty, SearchBox, Sheet, matchStudent, useUI } from '../components/ui';
 import { IArchive, ICard, IDown, IEdit, IMove, IPlus, IQr, ITrash, IUp, IUpload, IUsers } from '../components/Icons';
 import { exportQrCards } from '../lib/qrCards';
 import { normCard } from '../lib/card';
+import { historyGroup } from '../lib/history';
 import { CardPairSheet } from '../components/CardPair';
 import { getSetting } from '../db/repo';
 import { parseExcel, downloadTemplate, type ParsedSheet } from '../lib/importExcel';
@@ -25,6 +27,7 @@ export default function StudentsPage() {
     <>
       <header className="topbar">
         <h1>{t('students_title')}</h1>
+        <UndoBar />
         {isAdmin && (
           <>
             <button className="ib" onClick={() => setImporting(true)} aria-label={t('import_excel')}>
@@ -182,7 +185,9 @@ function StudentsTab({ classes, onEdit, onImport }: { classes: ClassRoom[]; onEd
           <button
             className="btn ghost"
             onClick={async () => {
-              for (const id of sel) await setStudentActive(id, archived);
+              await historyGroup(async () => {
+                for (const id of sel) await setStudentActive(id, archived);
+              });
               ui.toast(archived ? t('restored_done') : t('archived_done'));
               setSel(new Set());
             }}
