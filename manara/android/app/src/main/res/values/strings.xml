@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">منارة المعرفة</string>
     <string name="title_activity_main">منارة المعرفة</string>
-    <string name="package_name">app.manara.knowledge</string>
-    <string name="custom_url_scheme">app.manara.knowledge</string>
+    <string name="package_name" translatable="false">app.manara.knowledge</string>
+    <string name="custom_url_scheme" translatable="false">app.manara.knowledge</string>
     <string name="ask_manara">اسأل منارة</string>
     <string name="floating_channel">النافذة العائمة</string>
     <string name="floating_title">منارة — المرافق</string>
