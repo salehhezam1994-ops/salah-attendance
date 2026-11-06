@@ -262,8 +262,7 @@ async function planJourney(userId: string, journeyId: string) {
       ]);
       recordUsage(userId, 'research');
       notes = web.notes;
-      const terms = (st.slots.topic ?? '').split(/\s+/);
-      const stored = await storeSources(journeyId, [...web.sources, ...dbHits.filter((s) => relevant(s, terms))]);
+      const stored = await storeSources(journeyId, [...web.sources, ...dbHits.filter((s) => relevant(s, [st.slots.topic ?? '']))]);
       stored.forEach((s, i) => sids.push({ sid: `S${i + 1}`, id: s.id, title: s.title, kind: s.kind, year: s.year ?? undefined, authors: s.authors ?? undefined }));
     }
     const plan = await buildPlan(llm(), { lang: st.lang, slots: st.slots, goal, notes, sources: sids.map(({ id: _id, ...r }) => r) });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 /** Scheduler + push delivery with a fake transport (no real push service is contacted). */
 process.env.MANARA_DB_FILE = ':memory:';
+process.env.MANARA_SCHOLARLY_DB = 'off'; // hermetic: no real scholarly APIs
 process.env.SOURCE_TIMEOUT_MS = '200';
 process.env.DATA_DIR = (await import('node:os')).tmpdir() + '/manara-notify-test';
 

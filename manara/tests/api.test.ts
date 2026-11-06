@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
  */
 process.env.SOURCE_TIMEOUT_MS = '300';
 process.env.MANARA_DB_FILE = ':memory:';
+process.env.MANARA_SCHOLARLY_DB = 'off'; // hermetic: no real scholarly APIs
 
 const { setLlm } = await import('../server/ai/llm.ts');
 const { createApp } = await import('../server/index.ts');

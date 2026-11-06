@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
  */
 const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 process.env.MANARA_DB_FILE = ':memory:';
+process.env.MANARA_SCHOLARLY_DB = 'off'; // hermetic: no real scholarly APIs
 process.env.FCM_SERVICE_ACCOUNT = JSON.stringify({
   project_id: 'manara-test',
   client_email: 'push@manara-test.iam.gserviceaccount.com',

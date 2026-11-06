@@ -115,3 +115,13 @@ test('companion understands voice/typed commands', () => {
   assert.equal(detectIntent('اربط هذا بما سبق').kind, 'link');
   assert.equal(detectIntent('ما معنى الحدوث؟').kind, 'ask');
 });
+
+test('research: database hits must match the topic, not just share a word', async () => {
+  const { relevant } = await import('../server/ai/research.ts');
+  const src = (title: string, text = '') => ({ url: 'u', title, kind: 'encyclopedia' as const, origin: 'wikipedia' as const, verified: true, excerpts: text ? [{ text, origin: 'summary' as const }] : [] });
+  assert.equal(relevant(src('A. P. J. Abdul Kalam', 'Indian aerospace scientist and president'), ['new kalam']), false);
+  assert.equal(relevant(src('New Kalam', 'A modern current of Islamic theology'), ['new kalam']), true);
+  assert.equal(relevant(src('علم الكلام الجديد: مدخل'), ['علم الكلام الجديد']), true);
+  assert.equal(relevant(src('الكلام في الفيزياء'), ['علم الكلام الجديد']), false);
+  assert.equal(relevant(src('Islamic economics and finance: principles of banking'), ['principles of Islamic economics and banking']), true);
+});

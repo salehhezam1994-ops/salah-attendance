@@ -79,8 +79,7 @@ async function generateLesson(userId: string, lessonId: string) {
       ]);
       recordUsage(userId, 'research');
       notes = web.notes;
-      const terms = [...node.title.split(/\s+/), ...(st.slots.topic ?? '').split(/\s+/)];
-      const stored = await storeSources(j.id, [...web.sources, ...dbHits.filter((s) => relevant(s, terms))]);
+      const stored = await storeSources(j.id, [...web.sources, ...dbHits.filter((s) => relevant(s, [node.title, st.slots.topic ?? '']))]);
       for (const s of stored) {
         if (!sources.some((x) => x.id === s.id)) sources.push(s);
         q.run('INSERT OR IGNORE INTO node_sources(node_id,source_id) VALUES (?,?)', node.id, s.id);

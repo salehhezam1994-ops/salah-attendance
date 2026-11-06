@@ -208,6 +208,7 @@ Find 4-8 strong sources (include at least one original/founding or reference wor
 
 /** Scholarly-database pass (works where the network allows these APIs). */
 export async function databaseResearch(query: string, lang: string, sourcePref: string): Promise<FoundSource[]> {
+  if (!scholarlyDbEnabled()) return [];
   const tasks: Promise<FoundSource[]>[] = [searchOpenAlex(query, { perPage: 4 }), searchWikipedia(query, lang)];
   if (sourcePref !== 'modern') tasks.push(searchOpenLibrary(query));
   const settled = await Promise.allSettled(tasks);
@@ -217,8 +218,25 @@ export async function databaseResearch(query: string, lang: string, sourcePref: 
   return out;
 }
 
-/** Light relevance filter so database hits don't drift off-topic. */
-export function relevant(s: FoundSource, terms: string[]) {
+const STOP = new Set(['the', 'and', 'for', 'with', 'from', 'into', 'about', 'of', 'in', 'on', 'to', 'في', 'من', 'علي', 'الي', 'عن', 'مع', 'او', 'ثم']);
+const keyTerms = (phrase: string) => normalizeText(phrase).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2 && !STOP.has(w));
+
+/**
+ * Relevance filter for scholarly-database hits (which come from plain keyword
+ * search and drift easily: "new kalam" must not match a biography of someone
+ * named Kalam). A hit is kept if, for at least one phrase, the whole phrase
+ * appears in its title/abstract, or (for longer phrases) most of its key terms do.
+ */
+export function relevant(s: FoundSource, phrases: string[]) {
   const hay = normalizeText(`${s.title} ${s.excerpts.map((e) => e.text).join(' ')}`);
-  return terms.some((t) => t.length > 2 && hay.includes(normalizeText(t)));
+  return phrases.some((p) => {
+    const terms = keyTerms(p);
+    if (!terms.length) return false;
+    if (hay.includes(normalizeText(p))) return true;
+    if (terms.length < 3) return false;
+    return terms.filter((t) => hay.includes(t)).length / terms.length >= 0.6;
+  });
 }
+
+/** Scholarly databases can be switched off (e.g. hermetic tests, restricted networks). */
+export const scholarlyDbEnabled = () => process.env.MANARA_SCHOLARLY_DB !== 'off';
