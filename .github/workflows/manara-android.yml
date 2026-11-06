@@ -1,0 +1,49 @@
+name: Manara — Android APK
+on:
+  push:
+    paths: ['manara/**', '.github/workflows/manara-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: manara
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: manara/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      # The app shell loads the deployed server (repository variable MANARA_SERVER_URL).
+      - run: npx cap sync android
+        env:
+          MANARA_SERVER_URL: ${{ vars.MANARA_SERVER_URL }}
+      # Optional: Firebase config for native push (repository secret GOOGLE_SERVICES_JSON).
+      - name: Firebase config (optional)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: if [ -n "$GOOGLE_SERVICES_JSON" ]; then echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json; fi
+      - name: Build APK (runner has the Android SDK preinstalled)
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          cd android && chmod +x gradlew && ./gradlew assembleDebug lintDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manara-apk
+          path: manara/android/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manara-lint
+          path: manara/android/app/build/reports/lint-results-debug.html

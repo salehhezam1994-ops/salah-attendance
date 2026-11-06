@@ -4,6 +4,7 @@ import { api, del, patch } from '../api';
 import { useApp, type Prefs as P } from '../state';
 import { ErrorBox, fmtDate } from '../components/ui';
 import { IBack } from '../components/Icons';
+import { NotifySettings } from '../components/NotifySettings';
 
 function ListEditor({ label, items, onChange }: { label: string; items: string[]; onChange: (v: string[]) => void }) {
   const { t } = useApp();
@@ -142,17 +143,7 @@ export default function Prefs() {
 
       <div className="card">
         <h3>{t('pref_notify')}</h3>
-        <label className="switch"><span>{t('notify_enable')}</span>
-          <input type="checkbox" checked={p.notify.enabled} onChange={async (e) => {
-            const on = e.target.checked;
-            if (on && typeof Notification !== 'undefined' && Notification.permission === 'default') await Notification.requestPermission();
-            void save({ notify: { ...p.notify, enabled: on } });
-          }} />
-        </label>
-        <label className="switch"><span>{t('notify_time')}</span><input type="time" className="input" style={{ width: 130 }} value={p.notify.dailyTime} onChange={(e) => save({ notify: { ...p.notify, dailyTime: e.target.value } })} /></label>
-        <label className="switch"><span>{t('notify_reviews')}</span><input type="checkbox" checked={p.notify.reviews} onChange={(e) => save({ notify: { ...p.notify, reviews: e.target.checked } })} /></label>
-        <label className="switch"><span>{t('notify_comeback')}</span><input type="checkbox" checked={p.notify.comeback} onChange={(e) => save({ notify: { ...p.notify, comeback: e.target.checked } })} /></label>
-        <label className="switch"><span>{t('notify_updates')}</span><input type="checkbox" checked={p.notify.updates} onChange={(e) => save({ notify: { ...p.notify, updates: e.target.checked } })} /></label>
+        <NotifySettings />
         <p className="faint" style={{ marginTop: 8 }}>{t('notify_note')}</p>
       </div>
 

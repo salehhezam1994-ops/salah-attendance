@@ -8,6 +8,7 @@ import { config } from './config.ts';
 import { db, q } from './db.ts';
 import api from './routes/api.ts';
 import { HttpError, nowIso, safeLog } from './util.ts';
+import { startNotifier } from './services/notifier.ts';
 
 export function createApp() {
   const app = new Hono();
@@ -36,6 +37,7 @@ export function createApp() {
 if (process.argv[1] && /server[\\/]index\.ts$/.test(process.argv[1])) {
   db();
   const app = createApp();
+  startNotifier();
   serve({ fetch: app.fetch, port: config.port }, (info) => {
     console.log(`[manara] listening on http://localhost:${info.port} — AI mode: ${config.aiMode}`);
     if (config.aiMode === 'off') console.log('[manara] No ANTHROPIC_API_KEY: interview works; plans/lessons need AI (or MANARA_AI=demo for a declared demo).');

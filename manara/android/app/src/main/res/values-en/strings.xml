@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Manara</string>
+    <string name="title_activity_main">Manara</string>
+    <string name="ask_manara">Ask Manara</string>
+    <string name="floating_channel">Floating window</string>
+    <string name="floating_title">Manara — Companion</string>
+    <string name="floating_text">The floating window is open. Tap “Close” to stop it.</string>
+    <string name="floating_close">Close</string>
+    <string name="floating_minimize">Minimize</string>
+    <string name="floating_resize">Resize</string>
+</resources>

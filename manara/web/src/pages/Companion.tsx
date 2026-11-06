@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, post } from '../api';
 import { useApp } from '../state';
-import { ErrorBox, Loading } from '../components/ui';
+import { ErrorBox, Loading, Sheet } from '../components/ui';
 import { MicButton } from '../components/MicButton';
 import { IFloat, ISend, ISpeaker } from '../components/Icons';
 import { useSpeech } from '../voice';
+import { FloatingCompanion, nativeFloatingAvailable } from '../floating';
 
 type Msg = { id: string; role: 'user' | 'assistant'; content: string; meta?: any };
 
@@ -162,6 +163,14 @@ export default function Companion() {
   const lessonId = sp.get('lesson');
   const mini = sp.get('mini') === '1';
   const floating = useFloating();
+  const [floatSheet, setFloatSheet] = useState<null | { permission: boolean; denied?: boolean }>(null);
+  const miniUrl = `${window.location.origin}/j/${id}/companion?mini=1${lessonId ? `&lesson=${lessonId}` : ''}`;
+  const openFloating = async () => {
+    if (!nativeFloatingAvailable()) return floating.open(`/j/${id}/companion?mini=1`);
+    const s = await FloatingCompanion.status();
+    if (s.permission) return FloatingCompanion.start({ url: miniUrl });
+    setFloatSheet({ permission: false }); // explain before sending the user to system settings
+  };
   const [lessonTitle, setLessonTitle] = useState<string | null>(null);
   useEffect(() => {
     if (lessonId) api(`/lessons/${lessonId}`).then((d) => setLessonTitle(d.lesson.title)).catch(() => undefined);
@@ -186,11 +195,25 @@ export default function Companion() {
       {!mini && (
         <div className="topbar">
           <h1 className="title" style={{ margin: 0 }}>{t('companion_title')}</h1>
-          <button className="icon-btn" title={t('float_help')} aria-label={t('float')} onClick={() => floating.open(`/j/${id}/companion?mini=1`)}><IFloat /></button>
+          <button className="icon-btn" title={t('float_help')} aria-label={t('float')} onClick={() => void openFloating()}><IFloat /></button>
         </div>
       )}
       {lessonTitle && <p className="tag ok" style={{ marginBottom: 10 }}>{t('discussing', { t: lessonTitle })}</p>}
       <CompanionChat journeyId={id!} lessonId={lessonId} initialAsk={sp.get('ask')} initialContext={shared} compact={mini} />
+      <Sheet open={!!floatSheet} onClose={() => setFloatSheet(null)} label={t('float_perm_title')}>
+        <h3>{t('float_perm_title')}</h3>
+        <p>{t('float_perm_text')}</p>
+        <p className="faint">{t('float_privacy')}</p>
+        {floatSheet?.denied && <p className="banner warn">{t('float_denied')}</p>}
+        <div className="row wrap">
+          {floatSheet?.permission ? (
+            <button className="btn primary" onClick={() => { setFloatSheet(null); void FloatingCompanion.start({ url: miniUrl }); }}>{t('float_start')}</button>
+          ) : (
+            <button className="btn primary" onClick={async () => { const r = await FloatingCompanion.requestPermission(); setFloatSheet({ permission: r.permission, denied: !r.permission }); }}>{t('float_open_settings')}</button>
+          )}
+          <button className="btn ghost" onClick={() => setFloatSheet(null)}>{t('cancel')}</button>
+        </div>
+      </Sheet>
       {floating.win && createPortal(<CompanionChat journeyId={id!} lessonId={lessonId} compact />, floating.win.document.body)}
     </div>
   );

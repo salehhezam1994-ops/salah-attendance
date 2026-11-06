@@ -24,6 +24,7 @@ export type JourneyRow = {
   created_at: string;
   started_at: string | null;
   last_active_at: string | null;
+  updates_checked_at?: string | null;
 };
 
 export type PlanMeta = {

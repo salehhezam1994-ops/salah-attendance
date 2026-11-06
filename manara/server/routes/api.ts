@@ -16,6 +16,7 @@ import {
   lessonQuiz, library, searchKnowledge,
 } from '../services/companion.ts';
 import type { Goal } from '../ai/planner.ts';
+import { fcmEnabled, removeSubscription, saveSubscription, sendToUser, subscriptionCount, vapidKeys } from '../services/push.ts';
 
 async function body<S extends z.ZodType>(c: Context, schema: S): Promise<z.infer<S>> {
   let raw: unknown = {};
@@ -383,6 +384,32 @@ auth.get('/notifications', (c) => c.json({ items: q.all('SELECT * FROM notificat
 auth.post('/notifications/:id/read', (c) => {
   q.run('UPDATE notifications SET read_at=? WHERE id=? AND user_id=?', nowIso(), c.req.param('id'), c.get('user').id);
   return c.json({ ok: true });
+});
+
+/* ------------------------------ Push notifications ------------------------------ */
+auth.get('/push/config', (c) => c.json({ webPushPublicKey: vapidKeys().publicKey, fcm: fcmEnabled(), devices: subscriptionCount(c.get('user').id) }));
+auth.post('/push/subscribe', async (c) => {
+  const b = await body(c, z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('webpush'), subscription: z.object({ endpoint: z.string().url().max(1000), keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }) }) }),
+    z.object({ kind: z.literal('fcm'), token: z.string().min(20).max(4096), platform: z.enum(['android', 'ios']) }),
+  ]));
+  const u = c.get('user');
+  if (b.kind === 'webpush') {
+    if (!/^https:\/\//.test(b.subscription.endpoint)) throw new HttpError(400, 'invalid_input');
+    saveSubscription(u.id, { kind: 'webpush', endpoint: b.subscription.endpoint, keys: b.subscription.keys, platform: 'web' });
+  } else saveSubscription(u.id, { kind: 'fcm', endpoint: b.token, platform: b.platform });
+  return c.json({ ok: true, devices: subscriptionCount(u.id) });
+});
+auth.post('/push/unsubscribe', async (c) => {
+  const b = await body(c, z.object({ endpoint: z.string().max(4096) }));
+  removeSubscription(c.get('user').id, b.endpoint);
+  return c.json({ ok: true });
+});
+auth.post('/push/test', async (c) => {
+  const u = c.get('user');
+  const ar = getPrefs(u.id).locale === 'ar';
+  const r = await sendToUser(u.id, { title: ar ? 'منارة المعرفة' : 'Manara', body: ar ? 'التنبيهات تعمل على هذا الجهاز.' : 'Notifications work on this device.', url: '/', tag: 'test' });
+  return c.json(r);
 });
 
 /* ------------------------------ Admin ------------------------------ */

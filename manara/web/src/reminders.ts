@@ -1,16 +1,18 @@
 import { useEffect } from 'react';
 import { api } from './api';
 import { useApp } from './state';
+import { hasServerPush } from './push';
 
 /**
  * Gentle local reminders through the Notification API while the app (or the
- * installed PWA) is running: once a day at the chosen time if today's dose is
+ * installed PWA) is running — used only as a fallback when this device has no
+ * server push (otherwise the server sends the reminder): once a day at the chosen time if today's dose is
  * unread, plus due reviews. Never more than one of each per day.
  */
 export function useReminders(journeyId: string | undefined) {
   const { me, t } = useApp();
   useEffect(() => {
-    if (!journeyId || !me?.prefs.notify.enabled || typeof Notification === 'undefined') return;
+    if (!journeyId || !me?.prefs.notify.enabled || typeof Notification === 'undefined' || hasServerPush()) return;
     const check = async () => {
       if (Notification.permission !== 'granted') return;
       const day = new Date().toISOString().slice(0, 10);

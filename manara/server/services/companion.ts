@@ -7,8 +7,8 @@ import { checkLimit, recordUsage } from '../limits.ts';
 import { addMessage, conversationId, getJourney, interviewOf, messagesOf, requestChange } from './journeys.ts';
 import { lessonPlainText, todayLesson, ensureLessonReady } from './lessons.ts';
 import type { Goal } from '../ai/planner.ts';
-import { getPrefs } from './prefs.ts';
 import { storeSources } from './sources.ts';
+import { notifyUpdates } from './notifier.ts';
 
 /* ------------------------------ Companion chat ------------------------------ */
 
@@ -272,9 +272,8 @@ export async function checkUpdates(userId: string, journeyId: string) {
     );
     added += Number(res.changes);
   }
-  if (added && getPrefs(userId).notify.updates) {
-    q.run('INSERT INTO notifications(id,user_id,journey_id,kind,title,body,created_at) VALUES (?,?,?,?,?,?,?)', newId('nf_'), userId, journeyId, 'update', st.lang === 'ar' ? 'مستجدات علمية جديدة' : 'New research updates', String(added), nowIso());
-  }
+  q.run('UPDATE journeys SET updates_checked_at=? WHERE id=?', nowIso(), journeyId);
+  await notifyUpdates(userId, journeyId, added);
   return { added };
 }
 

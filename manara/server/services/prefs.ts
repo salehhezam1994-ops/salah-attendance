@@ -7,7 +7,23 @@ export const PrefsSchema = z.object({
   detail: z.enum(['brief', 'medium', 'detailed']),
   documentation: z.enum(['standard', 'strict']), // strict: hide unsupported paragraphs entirely
   voice: z.object({ rate: z.number().min(0.5).max(2), autoRead: z.boolean(), voiceName: z.string().nullable() }),
-  notify: z.object({ enabled: z.boolean(), dailyTime: z.string().regex(/^\d{2}:\d{2}$/), reviews: z.boolean(), comeback: z.boolean(), updates: z.boolean() }),
+  notify: z.object({
+    enabled: z.boolean(),
+    dailyTime: z.string().regex(/^\d{2}:\d{2}$/),
+    reviews: z.boolean(),
+    comeback: z.boolean(),
+    updates: z.boolean(),
+    quietStart: z.string().regex(/^\d{2}:\d{2}$/), // no pushes inside the quiet window
+    quietEnd: z.string().regex(/^\d{2}:\d{2}$/),
+  }),
+  timezone: z.string().max(64).refine((tz) => {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'invalid time zone'), // IANA zone reported by the device, used to schedule pushes in local time
   savedCommands: z.array(z.string().max(200)).max(30),
   advanced: z.boolean(), // show the advanced management mode
   interests: z.array(z.string().max(120)).max(30),
@@ -22,7 +38,8 @@ export const defaultPrefs = (locale: 'ar' | 'en' = 'ar'): Prefs => ({
   detail: 'medium',
   documentation: 'standard',
   voice: { rate: 1, autoRead: false, voiceName: null },
-  notify: { enabled: false, dailyTime: '08:00', reviews: true, comeback: true, updates: true },
+  notify: { enabled: false, dailyTime: '08:00', reviews: true, comeback: true, updates: true, quietStart: '22:00', quietEnd: '07:00' },
+  timezone: 'UTC',
   savedCommands: [],
   advanced: false,
   interests: [],

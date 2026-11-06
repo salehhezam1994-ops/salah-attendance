@@ -31,5 +31,12 @@ export const config = {
   sessionDays: 90,
   // External scholarly APIs; each one is optional and failures are tolerated.
   sourceTimeoutMs: Number(process.env.SOURCE_TIMEOUT_MS || 7000),
+  // Push notifications. VAPID keys are generated and stored in DATA_DIR if not provided.
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',
+  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
+  // Firebase Cloud Messaging for the native Android app: service-account JSON (inline or file path).
+  fcmServiceAccount: process.env.FCM_SERVICE_ACCOUNT || '',
+  schedulerIntervalMs: Number(process.env.NOTIFY_INTERVAL_MS || 60000),
   contactUserAgent: 'ManaraKnowledge/0.1 (scholarly companion app)',
 };

@@ -7,7 +7,8 @@ export type Prefs = {
   detail: 'brief' | 'medium' | 'detailed';
   documentation: 'standard' | 'strict';
   voice: { rate: number; autoRead: boolean; voiceName: string | null };
-  notify: { enabled: boolean; dailyTime: string; reviews: boolean; comeback: boolean; updates: boolean };
+  notify: { enabled: boolean; dailyTime: string; reviews: boolean; comeback: boolean; updates: boolean; quietStart: string; quietEnd: string };
+  timezone: string;
   savedCommands: string[];
   advanced: boolean;
   interests: string[];
@@ -77,6 +78,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, [locale]);
+
+  // Keep the device time zone on the server so pushes arrive at the learner's local time.
+  useEffect(() => {
+    if (!me) return;
+    let tz = 'UTC';
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch {
+      /* ignore */
+    }
+    if (me.prefs.timezone !== tz) void put('/prefs', { timezone: tz }).catch(() => undefined);
+  }, [me]);
 
   useEffect(() => {
     const th = me?.prefs.theme ?? 'system';

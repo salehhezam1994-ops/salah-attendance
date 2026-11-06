@@ -272,6 +272,25 @@ CREATE TABLE IF NOT EXISTS usage (
   count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(user_id, period, metric)
 );
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,                -- webpush | fcm
+  endpoint TEXT NOT NULL UNIQUE,     -- Web Push endpoint URL or FCM registration token
+  keys_json TEXT,                    -- Web Push p256dh/auth keys
+  platform TEXT,                     -- web | android | ios
+  created_at TEXT NOT NULL,
+  last_ok_at TEXT,
+  failures INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+CREATE TABLE IF NOT EXISTS push_log (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,                -- daily | comeback | update | test
+  day TEXT NOT NULL,                 -- learner's local date YYYY-MM-DD
+  sent_at TEXT NOT NULL,
+  PRIMARY KEY(user_id, kind, day)
+);
 CREATE TABLE IF NOT EXISTS error_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at TEXT NOT NULL,
@@ -287,7 +306,16 @@ export function openDb(file?: string): DatabaseSync {
   if (target !== ':memory:') fs.mkdirSync(path.dirname(target), { recursive: true });
   const db = new DatabaseSync(target);
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/** Additive migrations for databases created by earlier versions. */
+function migrate(d: DatabaseSync) {
+  const has = (table: string, col: string) => (d.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === col);
+  if (!has('journeys', 'updates_checked_at')) d.exec('ALTER TABLE journeys ADD COLUMN updates_checked_at TEXT');
+  if (!has('notifications', 'url')) d.exec('ALTER TABLE notifications ADD COLUMN url TEXT');
+  if (!has('notifications', 'delivered')) d.exec('ALTER TABLE notifications ADD COLUMN delivered INTEGER NOT NULL DEFAULT 0');
 }
 
 export function db(): DatabaseSync {

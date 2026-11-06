@@ -16,5 +16,6 @@ export default function Share() {
     /* ignore */
   }
   const j = me?.journeys.find((x) => x.status === 'active') ?? me?.journeys[0];
-  return <Navigate to={j ? `/j/${j.id}/companion` : '/'} replace />;
+  const mini = sp.get('mini') === '1' ? '?mini=1' : '';
+  return <Navigate to={j ? `/j/${j.id}/companion${mini}` : '/'} replace />;
 }
