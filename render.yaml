@@ -1,26 +1,24 @@
-# Render Blueprint for «منارة المعرفة» (the app lives in manara/).
-# One click: https://render.com/deploy?repo=https://github.com/salehhezam1994-ops/salah-attendance
+# Render Blueprint — FREE TRIAL of «منارة المعرفة» (the app lives in manara/).
+# Deploy: https://render.com/deploy?repo=https://github.com/salehhezam1994-ops/salah-attendance
+#
+# Trial limits (Render free plan):
+#  - declared demo mode: generic placeholder content, no AI key needed, no cost;
+#  - no persistent disk: accounts and journeys are erased whenever the service restarts;
+#  - the service sleeps after ~15 min idle, so the first visit after that takes about a minute.
+# For real use switch to manara/render.paid.yaml (persistent disk + ANTHROPIC_API_KEY).
 services:
   - type: web
-    name: manara
+    name: manara-trial
     runtime: node
     rootDir: manara
-    # A persistent disk keeps accounts, journeys and push keys across restarts (needs a paid instance).
-    plan: starter
+    plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
-    disk:
-      name: manara-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22.13.0"
+      - key: MANARA_AI
+        value: demo
       - key: DATA_DIR
-        value: /var/data
-      # Asked for in the Render dashboard when deploying; never stored in the repository.
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: VAPID_SUBJECT
-        value: mailto:admin@example.com  # change to a contact address for push services
+        value: /tmp/manara-data

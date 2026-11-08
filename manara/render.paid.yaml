@@ -1,0 +1,26 @@
+# Paid production blueprint (persistent disk + real AI). To use it: in Render choose
+# "Blueprint file path" = manara/render.paid.yaml, or copy it over the root render.yaml.
+services:
+  - type: web
+    name: manara
+    runtime: node
+    rootDir: manara
+    # A persistent disk keeps accounts, journeys and push keys across restarts (needs a paid instance).
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: manara-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22.13.0"
+      - key: DATA_DIR
+        value: /var/data
+      # Asked for in the Render dashboard when deploying; never stored in the repository.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:admin@example.com  # change to a contact address for push services
