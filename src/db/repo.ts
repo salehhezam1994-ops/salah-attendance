@@ -346,3 +346,33 @@ export async function bulkSet(date: string, slots: Slot[], students: Student[], 
   });
   return changed;
 }
+
+/**
+ * نقل سجلات وقت (صلاة/نشاط) من تاريخ إلى تاريخ/وقت آخر — لتصحيح تسجيل في يوم خاطئ.
+ * تُحذف السجلات من المصدر وتُكتب في الهدف بنفس الحالة والعذر والملاحظة وصف الطالب.
+ * إذا كان للطالب سجل في الهدف: يُستبدل فقط عند overwrite، وإلا يبقى سجل المصدر كما هو.
+ */
+export async function countSlot(date: string, slot: Slot) {
+  return db.attendance.where('[date+prayer]').equals([date, slot]).count();
+}
+export async function moveSlotRecords(fromDate: string, fromSlot: Slot, toDate: string, toSlot: Slot, overwrite: boolean) {
+  let moved = 0,
+    kept = 0;
+  await db.transaction('rw', db.attendance, async () => {
+    const src = await db.attendance.where('[date+prayer]').equals([fromDate, fromSlot]).toArray();
+    const ids = src.map((r) => attId(toDate, toSlot, r.studentId));
+    const existing = await db.attendance.bulkGet(ids);
+    const now = Date.now();
+    const put: Attendance[] = [];
+    const del: string[] = [];
+    src.forEach((r, i) => {
+      if (existing[i] && !overwrite) return void kept++;
+      put.push({ ...r, id: ids[i], date: toDate, prayer: toSlot, updatedAt: now });
+      del.push(r.id);
+    });
+    if (put.length) await db.attendance.bulkPut(put);
+    if (del.length) await db.attendance.bulkDelete(del);
+    moved = put.length;
+  });
+  return { moved, kept };
+}

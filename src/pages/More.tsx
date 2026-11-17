@@ -14,6 +14,7 @@ import { clearHistory, withoutHistory } from '../lib/history';
 import { t, LangSwitch } from '../i18n';
 import { LocationCard } from '../components/LocationCard';
 import { SchoolsCard } from '../components/SchoolSwitch';
+import { MoveRecordsCard } from '../components/MoveRecords';
 
 export default function MorePage() {
   const { user, isAdmin, logout } = useAuth();
@@ -120,6 +121,8 @@ export default function MorePage() {
                 <IUpload /> {t('restore_backup')}
               </button>
             </div>
+
+            <MoveRecordsCard />
           </>
         )}
 
